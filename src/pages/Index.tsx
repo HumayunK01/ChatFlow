@@ -238,7 +238,7 @@ const Index = () => {
           const title = generateChatTitle(firstUserMessage.content);
           const chatId = currentChatId || generateChatId();
           
-          // Get existing chat to preserve createdAt
+          // Get existing chat to preserve createdAt and other properties
           const existingChat = currentChatId ? getChatById(currentChatId) : null;
           
           const chat: SavedChat = {
@@ -248,6 +248,10 @@ const Index = () => {
             currentModel,
             createdAt: existingChat?.createdAt || Date.now(),
             updatedAt: Date.now(),
+            // Preserve existing properties
+            isPinned: existingChat?.isPinned || false,
+            folderId: existingChat?.folderId || null,
+            tags: existingChat?.tags || [],
           };
           
           saveChat(chat);
