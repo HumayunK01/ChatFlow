@@ -4,13 +4,21 @@ import { ChatMessage } from './ChatMessage';
 import { ChatTopBar } from './ChatTopBar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Loader2, Plus, X, Mic } from 'lucide-react';
+import { Send, Loader2, Plus, X, Mic, Check, ChevronDown } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { sendChatMessage } from '@/lib/openrouter';
 import { useToast } from '@/hooks/use-toast';
 import { deleteChat, archiveChat, getChatById } from '@/lib/localStorage';
 import { Logo } from './Logo';
 import { exportAsPDF, exportAsMarkdown, exportAsJSON, downloadFile } from '@/lib/export';
+import { cn } from '@/lib/utils';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -45,6 +53,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [modelModalOpen, setModelModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentModelRef = useRef<string>(currentModel);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +93,16 @@ export function ChatInterface({
       currentModelRef.current = currentModel;
     }
   }, []);
+
+  // Helper function to remove "(free)" from model names
+  const removeFree = (name: string) => {
+    return name.replace(/\s*\(free\)/gi, '');
+  };
+
+  const handleModelSelect = (modelId: string) => {
+    onModelChange(modelId);
+    setModelModalOpen(false);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -708,29 +727,16 @@ export function ChatInterface({
                     <label className="block text-sm text-foreground mb-2">
                       Select Model
                     </label>
-                    <Select value={currentModel} onValueChange={onModelChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {models.map((model) => {
-                          const modelName = model.name.replace(/\s*\(free\)/gi, '');
-                          return (
-                            <SelectItem key={model.id} value={model.id} className="pl-8">
-                              <div className="flex items-center gap-2">
-                                <img 
-                                  src={isDark ? '/whitelogo.png' : '/blacklogo.png'}
-                                  alt="ChatFlow Logo" 
-                                  className="h-4 w-4 flex-shrink-0 object-contain"
-                                  style={{ objectFit: 'contain', aspectRatio: '1 / 1' }}
-                                />
-                                <span>{modelName}</span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setModelModalOpen(true)}
+                    >
+                      <span className="truncate">
+                        {currentModel ? removeFree(models.find(m => m.id === currentModel)?.name || 'Choose a model') : 'Choose a model'}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -747,29 +753,16 @@ export function ChatInterface({
                     <label className="block text-sm text-foreground mb-2">
                       Select Model
                     </label>
-                    <Select value={currentModel} onValueChange={onModelChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {models.map((model) => {
-                          const modelName = model.name.replace(/\s*\(free\)/gi, '');
-                          return (
-                            <SelectItem key={model.id} value={model.id} className="pl-8">
-                              <div className="flex items-center gap-2">
-                                <img 
-                                  src={isDark ? '/whitelogo.png' : '/blacklogo.png'}
-                                  alt="ChatFlow Logo" 
-                                  className="h-4 w-4 flex-shrink-0 object-contain"
-                                  style={{ objectFit: 'contain', aspectRatio: '1 / 1' }}
-                                />
-                                <span>{modelName}</span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setModelModalOpen(true)}
+                    >
+                      <span className="truncate">
+                        {currentModel ? removeFree(models.find(m => m.id === currentModel)?.name || 'Choose a model') : 'Choose a model'}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
                   </div>
                 </div>
               )}
@@ -895,6 +888,47 @@ export function ChatInterface({
            </div>
          </div>
        </div>
+
+       {/* Model Selection Modal */}
+       <Dialog open={modelModalOpen} onOpenChange={setModelModalOpen}>
+         <DialogContent className="sm:max-w-[700px] max-w-[90vw] max-h-[60vh] flex flex-col">
+           <DialogHeader>
+             <DialogTitle>Select Model</DialogTitle>
+             <DialogDescription>
+               Choose an AI model to use for this conversation.
+             </DialogDescription>
+           </DialogHeader>
+           <ScrollArea className="flex-1 pr-4">
+             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+               {models.map((model) => {
+                 const modelName = removeFree(model.name);
+                 const isSelected = model.id === currentModel;
+                 return (
+                   <button
+                     key={model.id}
+                     onClick={() => handleModelSelect(model.id)}
+                     className={cn(
+                       "w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground text-left",
+                       isSelected && "bg-accent text-accent-foreground"
+                     )}
+                   >
+                     <img 
+                       src={isDark ? '/whitelogo.png' : '/blacklogo.png'}
+                       alt="ChatFlow Logo" 
+                       className="h-4 w-4 flex-shrink-0 object-contain"
+                       style={{ objectFit: 'contain', aspectRatio: '1 / 1' }}
+                     />
+                     <span className="truncate flex-1">{modelName}</span>
+                     {isSelected && (
+                       <Check className="h-4 w-4 ml-2 flex-shrink-0" />
+                     )}
+                   </button>
+                 );
+               })}
+             </div>
+           </ScrollArea>
+         </DialogContent>
+       </Dialog>
     </div>
   );
 }
