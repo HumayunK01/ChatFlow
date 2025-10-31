@@ -530,7 +530,7 @@ export function ChatInterface({
       />
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-24 md:pb-0">
         <div className="max-w-5xl mx-auto w-full">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full min-h-[400px] px-4">
@@ -648,7 +648,7 @@ export function ChatInterface({
       </div>
 
       {/* Input */}
-      <div className="border-t border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="fixed md:relative bottom-0 left-0 right-0 md:left-auto md:right-auto border-t border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-10">
         <div className="max-w-5xl mx-auto w-full py-3 sm:py-4 px-2 sm:px-4">
           {/* Selected Images Preview */}
           {selectedImages.length > 0 && (
