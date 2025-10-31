@@ -4,7 +4,7 @@ import { ChatMessage } from './ChatMessage';
 import { ChatTopBar } from './ChatTopBar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Loader2, Plus, X, Mic, Check, ChevronDown } from 'lucide-react';
+import { Send, Loader2, X, Check, ChevronDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -825,29 +825,6 @@ export function ChatInterface({
           <div className={`relative flex items-center border border-border/50 rounded-3xl px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm ${
             isTemporaryChat ? 'bg-gray-300 dark:bg-gray-700' : 'bg-secondary/50'
           }`}>
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageSelect}
-              className="hidden"
-            />
-
-            {/* Plus button on the left */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 rounded-full hover:bg-transparent p-0 mr-1 sm:mr-2"
-              onClick={handlePlusClick}
-              type="button"
-              disabled={isLoading}
-              title="Upload images"
-            >
-              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-            </Button>
-
             {/* Input */}
             <Input
               value={input}
@@ -857,19 +834,6 @@ export function ChatInterface({
               className="flex-1 h-auto bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none text-sm placeholder:text-muted-foreground/60 py-0"
               disabled={isLoading}
             />
-
-            {/* Microphone button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 rounded-full hover:bg-transparent p-0 ml-1 sm:ml-2 ${isListening ? 'text-red-500 dark:text-red-400' : ''}`}
-              onClick={handleStartDictation}
-              type="button"
-              disabled={isLoading}
-              title={isListening ? 'Stop dictation' : 'Start dictation'}
-            >
-              <Mic className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isListening ? 'animate-pulse' : ''}`} />
-            </Button>
 
             {/* Send button on the right */}
             <Button
