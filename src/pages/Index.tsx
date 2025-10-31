@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChatInterface } from '@/components/ChatInterface';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { Message, ApiKeyConfig, SavedChat } from '@/types/chat';
 import { API_KEYS } from '@/config/apiKeys';
 import {
   getChatList,
+  saveChatList,
   saveChat,
   deleteChat,
   archiveChat,
   renameChat,
   getChatById,
   generateChatTitle,
+  generateChatId,
   saveSelectedModel,
   loadSelectedModel,
 } from '@/lib/localStorage';
@@ -38,6 +41,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
@@ -51,6 +55,8 @@ const Index = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<SavedChat | null>(null);
   const [isChangingModel, setIsChangingModel] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isTemporaryChat, setIsTemporaryChat] = useState(false);
   const { toast } = useToast();
 
   // Initialize API keys from config
@@ -108,27 +114,79 @@ const Index = () => {
     initializeApiKeys();
   }, [toast]);
 
-  // Load chat list
+  // Load chat list and handle URL params on initial mount
   useEffect(() => {
     const chatList = getChatList();
     setSavedChats(chatList.chats);
-    setCurrentChatId(chatList.currentChatId);
     
-    // Load current chat if exists
-    if (chatList.currentChatId) {
-      const chat = getChatById(chatList.currentChatId);
+    // Check URL for chat ID - only load if URL explicitly has a chat ID
+    const chatIdFromUrl = searchParams.get('chat');
+    
+    if (chatIdFromUrl) {
+      // Load chat from URL (when sharing or direct link)
+      const chat = getChatById(chatIdFromUrl);
       if (chat) {
         setMessages(chat.messages);
         setCurrentModel(chat.currentModel);
+        setCurrentChatId(chatIdFromUrl);
+        // Update storage to match URL
+        chatList.currentChatId = chatIdFromUrl;
+        saveChatList(chatList);
+      } else {
+        // Chat not found, remove from URL
+        setSearchParams({}, { replace: true });
+        setCurrentChatId(null);
+        setMessages([]);
       }
     } else {
-      // Load selected model if no chat
+      // No URL param - start with new chat window
+      // Clear any stored currentChatId to ensure fresh start
+      setCurrentChatId(null);
+      setMessages([]);
+      
+      // Load selected model if available
       const storedModel = loadSelectedModel();
       if (storedModel) {
         setCurrentModel(storedModel);
       }
+      
+      // Clear chat ID from storage on page load to start fresh
+      chatList.currentChatId = null;
+      saveChatList(chatList);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Listen to URL changes (e.g., browser back/forward, direct URL access)
+  useEffect(() => {
+    const chatIdFromUrl = searchParams.get('chat');
+    
+    // Only react if URL chat ID is different from current chat ID
+    if (chatIdFromUrl !== currentChatId) {
+      if (chatIdFromUrl) {
+        const chat = getChatById(chatIdFromUrl);
+        if (chat) {
+          setMessages(chat.messages);
+          setCurrentModel(chat.currentModel);
+          setCurrentChatId(chatIdFromUrl);
+          // Update storage to match URL
+          const chatList = getChatList();
+          chatList.currentChatId = chatIdFromUrl;
+          saveChatList(chatList);
+          setSavedChats(chatList.chats);
+        } else {
+          // Chat not found, remove from URL
+          setSearchParams({}, { replace: true });
+          setCurrentChatId(null);
+          setMessages([]);
+        }
+      } else if (currentChatId) {
+        // URL cleared but we have a current chat - clear it
+        setCurrentChatId(null);
+        setMessages([]);
+      }
+    }
+  }, [searchParams, currentChatId, setSearchParams]);
 
   // Auto-select first model when key changes
   useEffect(() => {
@@ -154,6 +212,9 @@ const Index = () => {
 
   // Save chat when messages change (debounced to avoid excessive saves)
   useEffect(() => {
+    // Skip saving if this is a temporary chat
+    if (isTemporaryChat) return;
+    
     // Skip saving if we're currently changing models to prevent unnecessary operations
     if (isChangingModel) return;
     
@@ -163,7 +224,7 @@ const Index = () => {
         const firstUserMessage = messages.find(m => m.role === 'user');
         if (firstUserMessage) {
           const title = generateChatTitle(firstUserMessage.content);
-          const chatId = currentChatId || Date.now().toString();
+          const chatId = currentChatId || generateChatId();
           
           // Get existing chat to preserve createdAt
           const existingChat = currentChatId ? getChatById(currentChatId) : null;
@@ -180,6 +241,9 @@ const Index = () => {
           saveChat(chat);
           setCurrentChatId(chatId);
           
+          // Update URL with chat ID
+          setSearchParams({ chat: chatId }, { replace: true });
+          
           // Update saved chats list
           const chatList = getChatList();
           setSavedChats(chatList.chats);
@@ -187,11 +251,13 @@ const Index = () => {
       } else if (messages.length === 0 && currentChatId) {
         // Clear current chat if messages are empty
         setCurrentChatId(null);
+        // Remove chat ID from URL
+        setSearchParams({}, { replace: true });
       }
     }, 500); // Increased debounce to 500ms to avoid excessive saves
 
     return () => clearTimeout(timeoutId);
-  }, [messages, currentModel, currentChatId, isChangingModel]);
+  }, [messages, currentModel, currentChatId, isChangingModel, isTemporaryChat]);
 
   const handleModelChange = (modelId: string) => {
     // Prevent changing to the same model
@@ -200,30 +266,90 @@ const Index = () => {
     // Prevent rapid model changes
     if (isChangingModel) return;
     
-    setIsChangingModel(true);
-    setCurrentModel(modelId);
-    saveSelectedModel(modelId);
-    
+    // Validate that the model exists in available models
     const selectedKey = apiKeys.find(k => k.name === selectedKeyName);
     const model = selectedKey?.models.find(m => m.id === modelId);
     
+    if (!model) {
+      toast({
+        title: 'Model Not Available',
+        description: `The model "${modelId}" is not available with your current API key.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsChangingModel(true);
+    
+    // Update the model state first
+    setCurrentModel(modelId);
+    saveSelectedModel(modelId);
+    
+    // If there's an existing chat with messages, update the chat's model immediately
+    if (currentChatId && messages.length > 0) {
+      const existingChat = getChatById(currentChatId);
+      if (existingChat) {
+        const updatedChat: SavedChat = {
+          ...existingChat,
+          messages,
+          currentModel: modelId, // Ensure we use the new model
+          updatedAt: Date.now(),
+        };
+        saveChat(updatedChat);
+        
+        // Update saved chats list
+        const chatList = getChatList();
+        setSavedChats(chatList.chats);
+      }
+    }
+    
     toast({
       title: 'Model Changed',
-      description: `Switched to ${model?.name || modelId}`,
+      description: `Switched to ${model.name}`,
     });
     
-    // Reset the flag after a short delay
+    // Reset the flag after a short delay to allow state to settle
     setTimeout(() => {
       setIsChangingModel(false);
-    }, 500);
+    }, 600);
   };
 
   const handleNewChat = () => {
     setMessages([]);
     setCurrentChatId(null);
+    setIsTemporaryChat(false); // Clear temporary mode when starting new chat
+    // Remove chat ID from URL
+    setSearchParams({}, { replace: true });
     toast({
       title: 'New Chat Started',
       description: 'Starting a new conversation',
+    });
+  };
+
+  const handleToggleTemporaryChat = () => {
+    setIsTemporaryChat(prev => {
+      const newValue = !prev;
+      if (newValue) {
+        // When enabling temporary mode, clear current chat and messages
+        setMessages([]);
+        setCurrentChatId(null);
+        setSearchParams({}, { replace: true });
+        toast({
+          title: 'Temporary Chat Mode',
+          description: 'This chat will not be saved',
+        });
+      } else {
+        // When disabling temporary mode, clear messages and reset to new chat interface
+        // This prevents saving the temporary chat when toggling off
+        setMessages([]);
+        setCurrentChatId(null);
+        setSearchParams({}, { replace: true });
+        toast({
+          title: 'Regular Chat Mode',
+          description: 'Starting a new chat',
+        });
+      }
+      return newValue;
     });
   };
 
@@ -237,6 +363,7 @@ const Index = () => {
       if (chatId === currentChatId) return;
       
       setIsChangingModel(true);
+      setIsTemporaryChat(false); // Disable temporary mode when selecting a saved chat
       setMessages(chat.messages);
       setCurrentModel(chat.currentModel);
       setCurrentChatId(chatId);
@@ -245,6 +372,9 @@ const Index = () => {
       const chatList = getChatList();
       chatList.currentChatId = chatId;
       saveChatList(chatList);
+      
+      // Update URL with chat ID
+      setSearchParams({ chat: chatId }, { replace: true });
       
       // Reset the flag after a short delay
       setTimeout(() => {
@@ -265,6 +395,8 @@ const Index = () => {
     if (currentChatId && !chatList.chats.find(c => c.id === currentChatId)) {
       setCurrentChatId(null);
       setMessages([]);
+      // Remove chat ID from URL
+      setSearchParams({}, { replace: true });
     }
   };
 
@@ -276,22 +408,25 @@ const Index = () => {
     if (currentChatId && !chatList.chats.find(c => c.id === currentChatId)) {
       setCurrentChatId(null);
       setMessages([]);
+      // Remove chat ID from URL
+      setSearchParams({}, { replace: true });
     }
   };
 
   const handleShareChat = (chatId: string) => {
     const chat = getChatById(chatId);
     if (chat && chat.messages.length > 0) {
-      const chatText = chat.messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
-      navigator.clipboard.writeText(chatText).then(() => {
+      // Copy the chat URL to clipboard
+      const chatUrl = `${window.location.origin}${window.location.pathname}?chat=${chatId}`;
+      navigator.clipboard.writeText(chatUrl).then(() => {
         toast({
           title: 'Copied',
-          description: 'Chat conversation copied to clipboard',
+          description: 'Chat URL copied to clipboard',
         });
       }).catch(() => {
         toast({
           title: 'Error',
-          description: 'Failed to copy chat',
+          description: 'Failed to copy chat URL',
           variant: 'destructive',
         });
       });
@@ -479,6 +614,8 @@ const Index = () => {
           apiKeyNames={apiKeys.map(k => k.name)}
           selectedKeyName={selectedKeyName}
           onSelectKeyName={handleSelectKeyName}
+          mobileSidebarOpen={mobileSidebarOpen}
+          onMobileSidebarChange={setMobileSidebarOpen}
         />
 
       <div className="flex-1 flex flex-col">
@@ -494,6 +631,9 @@ const Index = () => {
             currentChatId={currentChatId}
             onChatDeleted={handleChatDeleted}
             onChatArchived={handleChatArchived}
+            onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+            isTemporaryChat={isTemporaryChat}
+            onToggleTemporaryChat={handleToggleTemporaryChat}
           />
         ) : (
           <div className="flex items-center justify-center h-full">

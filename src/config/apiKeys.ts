@@ -29,13 +29,41 @@ const getApiKeysFromEnv = (): Omit<ApiKeyConfig, 'models' | 'createdAt' | 'id'>[
   return apiKeys;
 };
 
-// Configure your API keys here
-// Option 1: Use environment variables (recommended)
-// Create a .env file in the root directory and add:
-// VITE_API_KEY_1_NAME=Primary
-// VITE_API_KEY_1=your_actual_api_key_here
-//
-// Option 2: Add them directly in the array below (less secure)
-// Note: Only API keys with actual values will be used to fetch models
+/**
+ * API Keys Configuration
+ * 
+ * This file automatically reads API keys from environment variables.
+ * 
+ * SETUP INSTRUCTIONS:
+ * ===================
+ * 1. Copy .env.example to .env in the root directory
+ * 2. Add your OpenRouter API keys in the following format:
+ * 
+ *    VITE_API_KEY_1_NAME=Primary
+ *    VITE_API_KEY_1=your_actual_api_key_here
+ *    
+ *    VITE_API_KEY_2_NAME=Secondary (optional)
+ *    VITE_API_KEY_2=another_api_key_here (optional)
+ * 
+ * 3. You can add up to 10 API keys (VITE_API_KEY_1 through VITE_API_KEY_10)
+ * 
+ * 4. Each API key will automatically fetch its available models from OpenRouter
+ * 
+ * OPTIONAL - Model Filtering:
+ * ===========================
+ * To show only specific models, add them to your .env file:
+ * 
+ *    VITE_MODEL_1=openai/gpt-4-turbo
+ *    VITE_MODEL_2=anthropic/claude-3-opus
+ *    VITE_MODEL_3=google/gemini-pro
+ * 
+ *    (Supports up to 20 models: VITE_MODEL_1 through VITE_MODEL_20)
+ * 
+ * If no models are specified, all available models for each API key will be shown.
+ * 
+ * After updating .env, restart the development server for changes to take effect.
+ * 
+ * For more information, see .env.example file in the root directory.
+ */
 export const API_KEYS: Omit<ApiKeyConfig, 'models' | 'createdAt' | 'id'>[] = 
   getApiKeysFromEnv();

@@ -8,6 +8,11 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ models, selectedModel, onModelChange }: ModelSelectorProps) {
+  // Helper function to remove "(free)" from model names
+  const removeFree = (name: string) => {
+    return name.replace(/\s*\(free\)/gi, '');
+  };
+
   return (
     <div className="w-full">
       <Select value={selectedModel} onValueChange={onModelChange}>
@@ -17,7 +22,7 @@ export function ModelSelector({ models, selectedModel, onModelChange }: ModelSel
         <SelectContent>
           {models.map((model) => (
             <SelectItem key={model.id} value={model.id} className="text-sm font-medium">
-              {model.name}
+              {removeFree(model.name)}
             </SelectItem>
           ))}
         </SelectContent>

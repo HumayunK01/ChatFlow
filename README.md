@@ -67,21 +67,32 @@
 
 3. **Configure your API keys**
    
-   Create a `.env` file in the root directory:
-   ```env
-   VITE_OPENROUTER_API_KEY=your_api_key_here
+   Copy `.env.example` to `.env` in the root directory:
+   ```bash
+   cp .env.example .env
    ```
    
-   Or configure multiple API keys in `src/config/apiKeys.ts`:
-   ```typescript
-   export const API_KEYS: ApiKeyConfig[] = [
-     {
-       name: 'Primary',
-       key: 'your-api-key-here',
-       models: ['openai/gpt-4', 'anthropic/claude-3-opus']
-     }
-   ];
+   Edit the `.env` file and add your OpenRouter API keys:
+   ```env
+   # API Key 1 (Required)
+   VITE_API_KEY_1_NAME=Primary
+   VITE_API_KEY_1=your_actual_api_key_here
+   
+   # API Key 2 (Optional - add more as needed)
+   VITE_API_KEY_2_NAME=Secondary
+   VITE_API_KEY_2=another_api_key_here
+   
+   # Optional: Filter specific models (up to 20 models)
+   VITE_MODEL_1=openai/gpt-4-turbo
+   VITE_MODEL_2=anthropic/claude-3-opus
+   VITE_MODEL_3=google/gemini-pro
    ```
+   
+   **Note**: 
+   - You can add up to 10 API keys (VITE_API_KEY_1 through VITE_API_KEY_10)
+   - Each API key automatically fetches its available models from OpenRouter
+   - If you specify models (VITE_MODEL_1, etc.), only those models will be shown
+   - If no models are specified, all available models for each API key will be shown
 
 4. **Start the development server**
    ```bash
@@ -190,38 +201,38 @@ ChatFlow/
 
 ### Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory by copying `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and add your OpenRouter API keys:
 
 ```env
-# OpenRouter API Key
-VITE_OPENROUTER_API_KEY=your_api_key_here
+# API Keys Configuration (Required)
+# Add up to 10 API keys. Each needs a name and the actual key.
+
+VITE_API_KEY_1_NAME=Primary
+VITE_API_KEY_1=your_actual_api_key_here
+
+VITE_API_KEY_2_NAME=Secondary  # Optional
+VITE_API_KEY_2=another_api_key_here  # Optional
+
+# Optional: Model Filtering
+# If specified, only these models will be shown (up to 20 models)
+# If not specified, all available models for each API key will be shown
+
+VITE_MODEL_1=openai/gpt-4-turbo
+VITE_MODEL_2=anthropic/claude-3-opus
+VITE_MODEL_3=google/gemini-pro
 ```
 
-### API Keys Configuration
-
-For more advanced setups, configure multiple API keys in `src/config/apiKeys.ts`:
-
-```typescript
-import { ApiKeyConfig } from '@/types/chat';
-
-export const API_KEYS: ApiKeyConfig[] = [
-  {
-    name: 'Primary Key',
-    key: process.env.VITE_OPENROUTER_API_KEY || '',
-    models: [
-      'openai/gpt-4',
-      'openai/gpt-3.5-turbo',
-      'anthropic/claude-3-opus',
-      'anthropic/claude-3-sonnet'
-    ]
-  },
-  {
-    name: 'Secondary Key',
-    key: 'another-api-key',
-    models: ['meta-llama/llama-3-70b-instruct']
-  }
-];
-```
+**How it works:**
+1. Add your API keys in the format: `VITE_API_KEY_[NUMBER]_NAME=Name` and `VITE_API_KEY_[NUMBER]=key`
+2. The system automatically fetches available models for each API key from OpenRouter
+3. Optionally filter models by adding `VITE_MODEL_[NUMBER]=model-id` entries
+4. Restart the development server after updating `.env`
 
 ### Supported Models
 
@@ -262,9 +273,24 @@ The app supports both light and dark themes. The theme automatically follows you
 
 ### Adding New Models
 
-1. Ensure your API key has access to the model
-2. Add the model ID to your API key configuration in `src/config/apiKeys.ts`
-3. The model will automatically appear in the model selector
+**Option 1: Automatic (Recommended)**
+- Simply add the API key in `.env` file
+- All models available for that API key will automatically be loaded
+- No code changes needed!
+
+**Option 2: Filter Specific Models**
+- Add model IDs to `.env` file:
+  ```env
+  VITE_MODEL_1=openai/gpt-4-turbo
+  VITE_MODEL_2=anthropic/claude-3-opus
+  VITE_MODEL_3=your-model-id-here
+  ```
+- Only the specified models will be shown
+- Supports up to 20 models (VITE_MODEL_1 through VITE_MODEL_20)
+
+**To find model IDs**: Visit [OpenRouter Models](https://openrouter.ai/models)
+
+After updating `.env`, restart the development server.
 
 ---
 

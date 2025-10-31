@@ -50,11 +50,62 @@ export const saveChatList = (chatList: ChatList): void => {
   localStorage.setItem(CHAT_LIST_KEY, JSON.stringify(chatList));
 };
 
+/**
+ * Generates a random, URL-safe ID for chats
+ * Uses crypto.randomUUID() if available, otherwise falls back to a custom generator
+ */
+export const generateChatId = (): string => {
+  // Use crypto.randomUUID() if available (modern browsers)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  
+  // Fallback: Generate a random string using timestamp and random characters
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 15);
+  return `${timestamp}-${randomPart}`;
+};
+
 export const generateChatTitle = (firstMessage: string): string => {
-  // Take first 50 characters or first line, whichever is shorter
-  const text = firstMessage.trim();
+  // Clean and normalize the message
+  let text = firstMessage.trim();
+  
+  // Remove markdown code blocks if present
+  text = text.replace(/```[\s\S]*?```/g, '');
+  text = text.replace(/`[^`]*`/g, '');
+  
+  // Remove extra whitespace and newlines
+  text = text.replace(/\s+/g, ' ').trim();
+  
+  // If the message is already short, return it
   if (text.length <= 50) return text;
   
+  // Try to get the first sentence
+  const firstSentence = text.match(/^[^.!?]+[.!?]/)?.[0];
+  if (firstSentence && firstSentence.length <= 50) {
+    return firstSentence.trim();
+  }
+  
+  // Extract key words and create a summary
+  // Remove common stop words for a better summary
+  const stopWords = /\b(a|an|and|are|as|at|be|by|for|from|has|he|in|is|it|its|of|on|that|the|to|was|will|with)\b/gi;
+  const words = text.split(/\s+/).filter(word => 
+    word.length > 2 && !stopWords.test(word)
+  );
+  
+  // Take first meaningful words up to 50 characters
+  let summary = '';
+  for (const word of words) {
+    if ((summary + ' ' + word).length > 47) break;
+    summary += (summary ? ' ' : '') + word;
+  }
+  
+  // If we have a meaningful summary, return it
+  if (summary.length > 10) {
+    return summary + '...';
+  }
+  
+  // Fallback: just truncate first line
   const firstLine = text.split('\n')[0];
   if (firstLine.length <= 50) return firstLine;
   

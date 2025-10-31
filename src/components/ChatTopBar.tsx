@@ -1,4 +1,4 @@
-import { ChevronDown, Share2, MoreVertical, Archive, Flag, Trash2, Check } from 'lucide-react';
+import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,14 +11,17 @@ import { OpenRouterModel } from '@/types/chat';
 interface ChatTopBarProps {
   models: OpenRouterModel[];
   selectedModel: string;
-  onModelChange: (modelId: string) => void;
   onArchive?: () => void;
   onReport?: () => void;
   onDelete?: () => void;
   onShare?: () => void;
+  hasMessages?: boolean;
+  onOpenMobileSidebar?: () => void;
+  isTemporaryChat?: boolean;
+  onToggleTemporaryChat?: () => void;
 }
 
-export function ChatTopBar({ models, selectedModel, onModelChange, onArchive, onReport, onDelete, onShare }: ChatTopBarProps) {
+export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelete, onShare, hasMessages = false, onOpenMobileSidebar, isTemporaryChat = false, onToggleTemporaryChat }: ChatTopBarProps) {
   const handleArchive = () => {
     onArchive?.();
   };
@@ -35,67 +38,80 @@ export function ChatTopBar({ models, selectedModel, onModelChange, onArchive, on
     onShare?.();
   };
 
+  // Helper function to remove "(free)" from model names
+  const removeFree = (name: string) => {
+    return name.replace(/\s*\(free\)/gi, '');
+  };
+
   return (
     <div className="relative h-14 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-2 sm:px-4">
-      {/* Left: ChatFlow with model selection dropdown */}
-      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 min-w-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-auto p-1 sm:p-2 font-semibold text-sm sm:text-base hover:bg-transparent truncate max-w-[150px] sm:max-w-none">
-              <span className="truncate">{models.find(m => m.id === selectedModel)?.name || 'ChatFlow'}</span>
-              <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-1 opacity-70 flex-shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 sm:w-64 max-h-[400px] overflow-y-auto">
-            {models.map((model) => (
-              <DropdownMenuItem
-                key={model.id}
-                onClick={() => onModelChange(model.id)}
-                className="flex items-center justify-between cursor-pointer"
-              >
-                <span className="flex-1 truncate">{model.name}</span>
-                {selectedModel === model.id && (
-                  <Check className="h-4 w-4 text-primary flex-shrink-0 ml-2" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Right: Share and More menu */}
-      <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0">
+      {/* Left: Mobile menu button and ChatFlow - model name */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 min-w-0">
+        {/* Mobile menu button */}
         <Button
           variant="ghost"
-          size="sm"
-          className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 font-medium"
-          onClick={handleShare}
+          size="icon"
+          className="md:hidden h-8 w-8 flex-shrink-0"
+          onClick={onOpenMobileSidebar}
         >
-          <Share2 className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Share</span>
+          <Menu className="h-5 w-5" />
         </Button>
+        <span className="text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">
+          {removeFree(models.find(m => m.id === selectedModel)?.name || 'ChatFlow')}
+        </span>
+      </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-              <MoreVertical className="h-4 w-4" />
+      {/* Right: Temporary chat, Share and More menu */}
+      <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0">
+        {/* Temporary Chat button - only show when no messages or in temporary mode */}
+        {(!hasMessages || isTemporaryChat) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 sm:h-9 sm:w-9 ${isTemporaryChat ? 'bg-muted' : ''}`}
+            onClick={onToggleTemporaryChat}
+            title={isTemporaryChat ? 'Temporary chat (not saved)' : 'Start temporary chat'}
+          >
+            <MessageCircleDashed className={`h-4 w-4 ${isTemporaryChat ? 'text-primary' : ''}`} />
+          </Button>
+        )}
+
+        {/* Share and More menu - only show when there are messages */}
+        {hasMessages && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 font-medium"
+              onClick={handleShare}
+            >
+              <Share2 className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Share</span>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={handleArchive}>
-              <Archive className="h-4 w-4 mr-2" />
-              Archive
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleReport}>
-              <Flag className="h-4 w-4 mr-2" />
-              Report
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={handleArchive}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleReport}>
+                  <Flag className="h-4 w-4 mr-2" />
+                  Report
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
     </div>
   );

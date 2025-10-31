@@ -1,5 +1,5 @@
 import { Message } from '@/types/chat';
-import { Copy, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RotateCw, Check, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -25,6 +25,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
   const { toast } = useToast();
   const themeContext = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -38,10 +39,15 @@ function CodeBlock({ code, language }: CodeBlockProps) {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
       toast({
         title: 'Copied',
         description: 'Code copied to clipboard',
       });
+      // Reset to copy icon after 2 seconds
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
     }).catch(() => {
       toast({
         title: 'Error',
@@ -52,7 +58,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
   };
 
   return (
-    <div className="relative my-4 mb-4 rounded-lg overflow-hidden bg-muted/40 border border-border/50 w-full">
+    <div className="relative my-4 mb-4 rounded-xl overflow-hidden bg-muted/40 border border-border/50 w-full">
       {/* Header with language label and copy button */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">
         <span className="text-xs font-medium text-muted-foreground">{language === 'text' ? '' : language}</span>
@@ -62,8 +68,12 @@ function CodeBlock({ code, language }: CodeBlockProps) {
           className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 gap-1.5"
           onClick={handleCopy}
         >
-          <Copy className="h-3 w-3" />
-          <span>Copy code</span>
+          {copied ? (
+            <Check className="h-3 w-3 text-green-500" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+          <span>{copied ? 'Copied' : 'Copy code'}</span>
         </Button>
       </div>
       {/* Code content */}
@@ -96,12 +106,53 @@ function CodeBlock({ code, language }: CodeBlockProps) {
 export function ChatMessage({ message, onLike, onDislike, onRegenerate }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  const handleDownloadImage = (url: string) => {
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Get file extension from URL or default to png
+    let extension = 'png';
+    if (url.includes('.')) {
+      const urlParts = url.split('.');
+      const potentialExt = urlParts[urlParts.length - 1].split('?')[0].toLowerCase();
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(potentialExt)) {
+        extension = potentialExt;
+      }
+    }
+    
+    // Create filename with timestamp
+    link.download = `image_${Date.now()}.${extension}`;
+    
+    // For data URLs or same-origin images, this works directly
+    // For cross-origin images, we need to fetch and convert to blob
+    if (url.startsWith('data:') || url.startsWith(window.location.origin)) {
+      link.click();
+    } else {
+      // Fetch the image and convert to blob for download
+      fetch(url)
+        .then(response => response.blob())
+        .then(blob => {
+          const blobUrl = URL.createObjectURL(blob);
+          link.href = blobUrl;
+          link.click();
+          // Clean up the blob URL
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        })
+        .catch(() => {
+          // Fallback: try direct download
+          link.click();
+        });
+    }
+  };
 
   return (
     <div className={`flex gap-2 sm:gap-4 px-2 sm:px-4 py-4 sm:py-6 transition-colors ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`flex flex-col space-y-2 overflow-hidden min-w-0 w-full ${isUser ? 'items-end max-w-[85%] sm:max-w-[80%]' : 'items-start w-full max-w-full'}`}>
         {/* Message bubble */}
-        <div className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 ${
+        <div className={`rounded-3xl px-3 py-2 sm:px-4 sm:py-2.5 ${
           isUser 
             ? 'bg-primary text-primary-foreground' 
             : 'bg-muted/50 text-foreground'
@@ -141,7 +192,7 @@ export function ChatMessage({ message, onLike, onDislike, onRegenerate }: ChatMe
                     code: ({ children, className }) => {
                       const isInline = !className;
                       return isInline ? (
-                        <code className="bg-muted/70 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                        <code className="bg-muted/70 px-1.5 py-0.5 rounded-md text-sm font-mono">{children}</code>
                       ) : (
                         <code className="text-sm font-mono">{children}</code>
                       );
@@ -159,6 +210,32 @@ export function ChatMessage({ message, onLike, onDislike, onRegenerate }: ChatMe
                         {children}
                       </a>
                     ),
+                    img: ({ src, alt, ...props }) => {
+                      // Limit display size to medium (max 480px width/height)
+                      // But keep original URL for full-size download
+                      return (
+                        <div className="my-4 inline-block max-w-xl relative group">
+                          <img
+                            src={src}
+                            alt={alt}
+                            className="max-w-full h-auto rounded-lg border border-border/50 object-contain"
+                            style={{ maxWidth: '480px', maxHeight: '480px' }}
+                            {...props}
+                          />
+                          {/* Download button on hover - top right corner */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadImage(src || '');
+                            }}
+                            className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white rounded-md p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Download image"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    },
                   }}
                 >
                   {message.content}
@@ -178,10 +255,15 @@ export function ChatMessage({ message, onLike, onDislike, onRegenerate }: ChatMe
               onClick={() => {
                 // Copy the whole response
                 navigator.clipboard.writeText(message.content).then(() => {
+                  setCopied(true);
                   toast({
                     title: 'Copied',
                     description: 'Response copied to clipboard',
                   });
+                  // Reset to copy icon after 2 seconds
+                  setTimeout(() => {
+                    setCopied(false);
+                  }, 2000);
                 }).catch(() => {
                   toast({
                     title: 'Error',
@@ -191,7 +273,11 @@ export function ChatMessage({ message, onLike, onDislike, onRegenerate }: ChatMe
                 });
               }}
             >
-              <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {copied ? (
+                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />
+              ) : (
+                <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              )}
             </Button>
             <Button
               variant="ghost"
