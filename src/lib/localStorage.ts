@@ -342,3 +342,44 @@ export const removeTagFromChat = (chatId: string, tag: string): void => {
   
   saveChatList(chatList);
 };
+
+// Pin/unpin chat management
+export const pinChat = (chatId: string): void => {
+  const chatList = getChatList();
+  
+  // Update in active chats
+  const activeChatIndex = chatList.chats.findIndex(c => c.id === chatId);
+  if (activeChatIndex >= 0) {
+    chatList.chats[activeChatIndex].isPinned = true;
+    chatList.chats[activeChatIndex].updatedAt = Date.now();
+  }
+  
+  // Update in archived chats
+  const archivedChatIndex = chatList.archivedChats.findIndex(c => c.id === chatId);
+  if (archivedChatIndex >= 0) {
+    chatList.archivedChats[archivedChatIndex].isPinned = true;
+    chatList.archivedChats[archivedChatIndex].updatedAt = Date.now();
+  }
+  
+  saveChatList(chatList);
+};
+
+export const unpinChat = (chatId: string): void => {
+  const chatList = getChatList();
+  
+  // Update in active chats
+  const activeChatIndex = chatList.chats.findIndex(c => c.id === chatId);
+  if (activeChatIndex >= 0) {
+    chatList.chats[activeChatIndex].isPinned = false;
+    chatList.chats[activeChatIndex].updatedAt = Date.now();
+  }
+  
+  // Update in archived chats
+  const archivedChatIndex = chatList.archivedChats.findIndex(c => c.id === chatId);
+  if (archivedChatIndex >= 0) {
+    chatList.archivedChats[archivedChatIndex].isPinned = false;
+    chatList.archivedChats[archivedChatIndex].updatedAt = Date.now();
+  }
+  
+  saveChatList(chatList);
+};

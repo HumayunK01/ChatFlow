@@ -21,6 +21,7 @@ export interface SavedChat {
   updatedAt: number;
   folderId?: string | null;
   tags?: string[];
+  isPinned?: boolean;
 }
 
 export interface ChatFolder {

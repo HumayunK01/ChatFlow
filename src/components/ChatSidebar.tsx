@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download, Sparkles, Folder, FolderPlus, Tag, Hash } from 'lucide-react';
+import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download, Sparkles, Folder, FolderPlus, Tag, Hash, Pin, PinOff } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
@@ -25,6 +25,8 @@ interface ChatSidebarProps {
   onCreateFolder?: (name: string, color?: string) => void;
   onUpdateFolder?: (folderId: string, updates: Partial<ChatFolder>) => void;
   onDeleteFolder?: (folderId: string) => void;
+  onPinChat?: (chatId: string) => void;
+  onUnpinChat?: (chatId: string) => void;
   apiKeyNames: string[];
   selectedKeyName: string;
   onSelectKeyName: (name: string) => void;
@@ -50,6 +52,8 @@ export function ChatSidebar({
   onCreateFolder,
   onUpdateFolder,
   onDeleteFolder,
+  onPinChat,
+  onUnpinChat,
   apiKeyNames,
   selectedKeyName,
   onSelectKeyName,
@@ -162,23 +166,36 @@ export function ChatSidebar({
     });
   };
 
-  // Group chats by folders
+  // Group chats by folders and pinned status
   const groupChatsByFolders = (chats: SavedChat[]) => {
     const chatsInFolders: { [folderId: string]: SavedChat[] } = {};
     const chatsWithoutFolder: SavedChat[] = [];
+    const pinnedChats: SavedChat[] = [];
 
     chats.forEach(chat => {
+      // Separate pinned chats (regardless of folder)
+      if (chat.isPinned) {
+        pinnedChats.push(chat);
+      }
+      
       if (chat.folderId) {
         if (!chatsInFolders[chat.folderId]) {
           chatsInFolders[chat.folderId] = [];
         }
         chatsInFolders[chat.folderId].push(chat);
-      } else {
+      } else if (!chat.isPinned) {
+        // Only add to chatsWithoutFolder if not pinned
         chatsWithoutFolder.push(chat);
       }
     });
 
-    return { chatsInFolders, chatsWithoutFolder };
+    // Sort pinned chats by updatedAt (most recent first)
+    pinnedChats.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+    
+    // Sort chats without folder by updatedAt (most recent first)
+    chatsWithoutFolder.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+
+    return { chatsInFolders, chatsWithoutFolder, pinnedChats };
   };
 
   const handleCreateFolder = () => {
@@ -446,18 +463,13 @@ export function ChatSidebar({
       {/* Chats section */}
       {!isCollapsed && (
         <div className="flex-1 overflow-y-auto px-2 sm:px-3 pt-2">
-          {/* Chats Section */}
           {chats.length > 0 && (
             <>
-              <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2">
-                Chats
-              </div>
-              
-              {/* Chats without folders */}
               {(() => {
-                const { chatsWithoutFolder } = groupChatsByFolders(chats);
+                const { pinnedChats, chatsWithoutFolder } = groupChatsByFolders(chats);
                 
-                return chatsWithoutFolder.map((chat) => (
+                // Render a chat item
+                const renderChatItem = (chat: SavedChat) => (
                   <div
                     key={chat.id}
                     className={`group relative rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 mb-1 transition-colors hover:bg-muted/70 min-h-[32px] sm:min-h-[36px] flex items-center ${
@@ -467,12 +479,17 @@ export function ChatSidebar({
                     onMouseLeave={() => setHoveredChatId(null)}
                   >
                     <div className="flex items-center justify-between w-full gap-1.5 sm:gap-2">
-                      <span
-                        onClick={() => onSelectChat(chat.id)}
-                        className="text-xs sm:text-sm text-foreground block truncate flex-1 cursor-pointer"
-                      >
-                        {chat.title}
-                      </span>
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                        {chat.isPinned && (
+                          <Pin className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0 text-muted-foreground" />
+                        )}
+                        <span
+                          onClick={() => onSelectChat(chat.id)}
+                          className="text-xs sm:text-sm text-foreground block truncate cursor-pointer"
+                        >
+                          {chat.title}
+                        </span>
+                      </div>
                       {/* Tags */}
                       {chat.tags && chat.tags.length > 0 && (
                         <div className="flex gap-1 flex-shrink-0 mr-2">
@@ -615,6 +632,34 @@ export function ChatSidebar({
                                   )}
                                   {/* Divider */}
                                   <div className="h-px bg-border my-1 mx-2" />
+                                  {chat.isPinned ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onUnpinChat?.(chat.id);
+                                        setOpenDropdownId(null);
+                                        setHoveredChatId(null);
+                                      }}
+                                      className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                    >
+                                      <PinOff className="h-4 w-4 mr-2 flex-shrink-0" />
+                                      <span className="flex-1 text-left">Unpin</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPinChat?.(chat.id);
+                                        setOpenDropdownId(null);
+                                        setHoveredChatId(null);
+                                      }}
+                                      className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                    >
+                                      <Pin className="h-4 w-4 mr-2 flex-shrink-0" />
+                                      <span className="flex-1 text-left">Pin</span>
+                                    </button>
+                                  )}
+                                  <div className="h-px bg-border my-1 mx-2" />
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -647,7 +692,36 @@ export function ChatSidebar({
                       </div>
                     </div>
                   </div>
-                ));
+                );
+
+                return (
+                  <>
+                    {/* Pinned Chats Section */}
+                    {pinnedChats.length > 0 && (
+                      <>
+                        <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2">
+                          Pinned
+                        </div>
+                        {pinnedChats.map((chat) => renderChatItem(chat))}
+                        <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2 mt-4">
+                          Chats
+                        </div>
+                      </>
+                    )}
+
+                    {/* Regular Chats Section */}
+                    {chatsWithoutFolder.length > 0 && (
+                      <>
+                        {pinnedChats.length === 0 && (
+                          <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2">
+                            Chats
+                          </div>
+                        )}
+                        {chatsWithoutFolder.map((chat) => renderChatItem(chat))}
+                      </>
+                    )}
+                  </>
+                );
               })()}
             </>
           )}
@@ -777,12 +851,17 @@ export function ChatSidebar({
                             onMouseLeave={() => setHoveredChatId(null)}
                           >
                             <div className="flex items-center justify-between w-full gap-1.5 sm:gap-2">
-                              <span
-                                onClick={() => onSelectChat(chat.id)}
-                                className="text-xs sm:text-sm text-foreground block truncate flex-1 cursor-pointer"
-                              >
-                                {chat.title}
-                              </span>
+                              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                                {chat.isPinned && (
+                                  <Pin className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0 text-muted-foreground" />
+                                )}
+                                <span
+                                  onClick={() => onSelectChat(chat.id)}
+                                  className="text-xs sm:text-sm text-foreground block truncate cursor-pointer"
+                                >
+                                  {chat.title}
+                                </span>
+                              </div>
                               {/* Tags */}
                               {chat.tags && chat.tags.length > 0 && (
                                 <div className="flex gap-1 flex-shrink-0 mr-2">
@@ -923,6 +1002,34 @@ export function ChatSidebar({
                                             </>
                                           )}
                                           {/* Divider */}
+                                          <div className="h-px bg-border my-1 mx-2" />
+                                          {chat.isPinned ? (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onUnpinChat?.(chat.id);
+                                                setOpenDropdownId(null);
+                                                setHoveredChatId(null);
+                                              }}
+                                              className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                            >
+                                              <PinOff className="h-4 w-4 mr-2 flex-shrink-0" />
+                                              <span className="flex-1 text-left">Unpin</span>
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onPinChat?.(chat.id);
+                                                setOpenDropdownId(null);
+                                                setHoveredChatId(null);
+                                              }}
+                                              className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                            >
+                                              <Pin className="h-4 w-4 mr-2 flex-shrink-0" />
+                                              <span className="flex-1 text-left">Pin</span>
+                                            </button>
+                                          )}
                                           <div className="h-px bg-border my-1 mx-2" />
                                           <button
                                             onClick={(e) => {

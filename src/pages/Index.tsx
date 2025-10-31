@@ -22,6 +22,8 @@ import {
   moveChatToFolder,
   addTagToChat,
   removeTagFromChat,
+  pinChat,
+  unpinChat,
 } from '@/lib/localStorage';
 import { fetchAvailableModels } from '@/lib/openrouter';
 import { useToast } from '@/hooks/use-toast';
@@ -487,6 +489,26 @@ const Index = () => {
     });
   };
 
+  const handlePinChat = (chatId: string) => {
+    pinChat(chatId);
+    const chatList = getChatList();
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Chat Pinned',
+      description: 'Chat has been pinned',
+    });
+  };
+
+  const handleUnpinChat = (chatId: string) => {
+    unpinChat(chatId);
+    const chatList = getChatList();
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Chat Unpinned',
+      description: 'Chat has been unpinned',
+    });
+  };
+
   const handleShareChat = (chatId: string) => {
     const chat = getChatById(chatId);
     if (chat && chat.messages.length > 0) {
@@ -706,6 +728,8 @@ const Index = () => {
           onCreateFolder={handleCreateFolder}
           onUpdateFolder={handleUpdateFolder}
           onDeleteFolder={handleDeleteFolder}
+          onPinChat={handlePinChat}
+          onUnpinChat={handleUnpinChat}
           apiKeyNames={apiKeys.map(k => k.name)}
           selectedKeyName={selectedKeyName}
           onSelectKeyName={handleSelectKeyName}
