@@ -1,4 +1,4 @@
-import { ChatHistory, Message, SavedChat, ChatList } from '@/types/chat';
+import { ChatHistory, Message, SavedChat, ChatList, ChatFolder } from '@/types/chat';
 
 const CHAT_HISTORY_KEY = 'chatgpt-clone-history';
 const CHAT_LIST_KEY = 'chatflow-chat-list';
@@ -31,18 +31,19 @@ export const clearChatHistory = (): void => {
 // New multi-chat functions
 export const getChatList = (): ChatList => {
   const stored = localStorage.getItem(CHAT_LIST_KEY);
-  if (!stored) return { chats: [], archivedChats: [], currentChatId: null };
+  if (!stored) return { chats: [], archivedChats: [], currentChatId: null, folders: [] };
   
   try {
     const parsed = JSON.parse(stored);
-    // Ensure archivedChats exists for backward compatibility
+    // Ensure all fields exist for backward compatibility
     return {
       chats: parsed.chats || [],
       archivedChats: parsed.archivedChats || [],
       currentChatId: parsed.currentChatId || null,
+      folders: parsed.folders || [],
     };
   } catch {
-    return { chats: [], archivedChats: [], currentChatId: null };
+    return { chats: [], archivedChats: [], currentChatId: null, folders: [] };
   }
 };
 
@@ -200,4 +201,144 @@ export const saveSelectedModel = (modelId: string): void => {
 
 export const loadSelectedModel = (): string | null => {
   return localStorage.getItem(MODEL_STORAGE);
+};
+
+// Folder management functions
+export const createFolder = (name: string, color?: string): ChatFolder => {
+  const chatList = getChatList();
+  // Ensure folders array exists
+  if (!chatList.folders) {
+    chatList.folders = [];
+  }
+  const folder: ChatFolder = {
+    id: generateChatId(),
+    name,
+    color,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  chatList.folders.push(folder);
+  saveChatList(chatList);
+  return folder;
+};
+
+export const updateFolder = (folderId: string, updates: Partial<ChatFolder>): void => {
+  const chatList = getChatList();
+  // Ensure folders array exists
+  if (!chatList.folders) {
+    chatList.folders = [];
+  }
+  const folderIndex = chatList.folders.findIndex(f => f.id === folderId);
+  if (folderIndex >= 0) {
+    chatList.folders[folderIndex] = {
+      ...chatList.folders[folderIndex],
+      ...updates,
+      updatedAt: Date.now(),
+    };
+    saveChatList(chatList);
+  }
+};
+
+export const deleteFolder = (folderId: string): void => {
+  const chatList = getChatList();
+  // Ensure folders array exists
+  if (!chatList.folders) {
+    chatList.folders = [];
+  }
+  // Remove folder
+  chatList.folders = chatList.folders.filter(f => f.id !== folderId);
+  // Remove folderId from chats that had this folder
+  chatList.chats = chatList.chats.map(chat => {
+    if (chat.folderId === folderId) {
+      return { ...chat, folderId: null };
+    }
+    return chat;
+  });
+  chatList.archivedChats = chatList.archivedChats.map(chat => {
+    if (chat.folderId === folderId) {
+      return { ...chat, folderId: null };
+    }
+    return chat;
+  });
+  saveChatList(chatList);
+};
+
+export const getFolderById = (folderId: string): ChatFolder | null => {
+  const chatList = getChatList();
+  return chatList.folders.find(f => f.id === folderId) || null;
+};
+
+// Chat folder/tag management
+export const moveChatToFolder = (chatId: string, folderId: string | null): void => {
+  const chatList = getChatList();
+  
+  // Update in active chats
+  const activeChatIndex = chatList.chats.findIndex(c => c.id === chatId);
+  if (activeChatIndex >= 0) {
+    chatList.chats[activeChatIndex].folderId = folderId;
+    chatList.chats[activeChatIndex].updatedAt = Date.now();
+  }
+  
+  // Update in archived chats
+  const archivedChatIndex = chatList.archivedChats.findIndex(c => c.id === chatId);
+  if (archivedChatIndex >= 0) {
+    chatList.archivedChats[archivedChatIndex].folderId = folderId;
+    chatList.archivedChats[archivedChatIndex].updatedAt = Date.now();
+  }
+  
+  saveChatList(chatList);
+};
+
+export const addTagToChat = (chatId: string, tag: string): void => {
+  const chatList = getChatList();
+  
+  // Update in active chats
+  const activeChatIndex = chatList.chats.findIndex(c => c.id === chatId);
+  if (activeChatIndex >= 0) {
+    const chat = chatList.chats[activeChatIndex];
+    if (!chat.tags) chat.tags = [];
+    if (!chat.tags.includes(tag)) {
+      chat.tags.push(tag);
+      chat.updatedAt = Date.now();
+    }
+  }
+  
+  // Update in archived chats
+  const archivedChatIndex = chatList.archivedChats.findIndex(c => c.id === chatId);
+  if (archivedChatIndex >= 0) {
+    const chat = chatList.archivedChats[archivedChatIndex];
+    if (!chat.tags) chat.tags = [];
+    if (!chat.tags.includes(tag)) {
+      chat.tags.push(tag);
+      chat.updatedAt = Date.now();
+    }
+  }
+  
+  saveChatList(chatList);
+};
+
+export const removeTagFromChat = (chatId: string, tag: string): void => {
+  const chatList = getChatList();
+  
+  // Update in active chats
+  const activeChatIndex = chatList.chats.findIndex(c => c.id === chatId);
+  if (activeChatIndex >= 0) {
+    const chat = chatList.chats[activeChatIndex];
+    if (chat.tags) {
+      chat.tags = chat.tags.filter(t => t !== tag);
+      chat.updatedAt = Date.now();
+    }
+  }
+  
+  // Update in archived chats
+  const archivedChatIndex = chatList.archivedChats.findIndex(c => c.id === chatId);
+  if (archivedChatIndex >= 0) {
+    const chat = chatList.archivedChats[archivedChatIndex];
+    if (chat.tags) {
+      chat.tags = chat.tags.filter(t => t !== tag);
+      chat.updatedAt = Date.now();
+    }
+  }
+  
+  saveChatList(chatList);
 };

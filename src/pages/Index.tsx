@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChatInterface } from '@/components/ChatInterface';
 import { ChatSidebar } from '@/components/ChatSidebar';
-import { Message, ApiKeyConfig, SavedChat } from '@/types/chat';
+import { Message, ApiKeyConfig, SavedChat, ChatFolder } from '@/types/chat';
 import { API_KEYS } from '@/config/apiKeys';
 import {
   getChatList,
@@ -16,9 +16,16 @@ import {
   generateChatId,
   saveSelectedModel,
   loadSelectedModel,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  moveChatToFolder,
+  addTagToChat,
+  removeTagFromChat,
 } from '@/lib/localStorage';
 import { fetchAvailableModels } from '@/lib/openrouter';
 import { useToast } from '@/hooks/use-toast';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +53,7 @@ const Index = () => {
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [savedChats, setSavedChats] = useState<SavedChat[]>([]);
+  const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>([]);
   const [selectedKeyName, setSelectedKeyName] = useState<string>('');
   const [isLoadingModels, setIsLoadingModels] = useState(true);
@@ -57,6 +65,7 @@ const Index = () => {
   const [isChangingModel, setIsChangingModel] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isTemporaryChat, setIsTemporaryChat] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const { toast } = useToast();
 
   // Initialize API keys from config
@@ -118,6 +127,7 @@ const Index = () => {
   useEffect(() => {
     const chatList = getChatList();
     setSavedChats(chatList.chats);
+    setFolders(chatList.folders || []);
     
     // Check URL for chat ID - only load if URL explicitly has a chat ID
     const chatIdFromUrl = searchParams.get('chat');
@@ -247,6 +257,7 @@ const Index = () => {
           // Update saved chats list
           const chatList = getChatList();
           setSavedChats(chatList.chats);
+          setFolders(chatList.folders || []);
         }
       } else if (messages.length === 0 && currentChatId) {
         // Clear current chat if messages are empty
@@ -404,6 +415,7 @@ const Index = () => {
     // Refresh the saved chats list after archiving
     const chatList = getChatList();
     setSavedChats(chatList.chats);
+    setFolders(chatList.folders || []);
     // Clear current chat if it was archived
     if (currentChatId && !chatList.chats.find(c => c.id === currentChatId)) {
       setCurrentChatId(null);
@@ -411,6 +423,68 @@ const Index = () => {
       // Remove chat ID from URL
       setSearchParams({}, { replace: true });
     }
+  };
+
+  // Folder handlers
+  const handleCreateFolder = (name: string, color?: string) => {
+    const folder = createFolder(name, color);
+    const chatList = getChatList();
+    setFolders(chatList.folders || []);
+    toast({
+      title: 'Folder Created',
+      description: `Folder "${name}" has been created`,
+    });
+  };
+
+  const handleUpdateFolder = (folderId: string, updates: Partial<ChatFolder>) => {
+    updateFolder(folderId, updates);
+    const chatList = getChatList();
+    setFolders(chatList.folders || []);
+    toast({
+      title: 'Folder Updated',
+      description: 'Folder has been updated',
+    });
+  };
+
+  const handleDeleteFolder = (folderId: string) => {
+    deleteFolder(folderId);
+    const chatList = getChatList();
+    setFolders(chatList.folders || []);
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Folder Deleted',
+      description: 'Folder has been deleted',
+    });
+  };
+
+  const handleMoveChatToFolder = (chatId: string, folderId: string | null) => {
+    moveChatToFolder(chatId, folderId);
+    const chatList = getChatList();
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Moved',
+      description: folderId ? 'Chat moved to folder' : 'Chat removed from folder',
+    });
+  };
+
+  const handleAddTagToChat = (chatId: string, tag: string) => {
+    addTagToChat(chatId, tag);
+    const chatList = getChatList();
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Tag Added',
+      description: `Tag "${tag}" has been added`,
+    });
+  };
+
+  const handleRemoveTagFromChat = (chatId: string, tag: string) => {
+    removeTagFromChat(chatId, tag);
+    const chatList = getChatList();
+    setSavedChats(chatList.chats);
+    toast({
+      title: 'Tag Removed',
+      description: `Tag "${tag}" has been removed`,
+    });
   };
 
   const handleShareChat = (chatId: string) => {
@@ -510,6 +584,20 @@ const Index = () => {
     setChatToDelete(null);
   };
 
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onSearch: () => setSearchModalOpen(true),
+    onClose: () => {
+      // Close all open modals/dialogs
+      setSearchModalOpen(false);
+      setRenameDialogOpen(false);
+      setDeleteDialogOpen(false);
+      setMobileSidebarOpen(false);
+    },
+    enabled: true,
+  });
+
   // Get current API key and available models
   const selectedKey = apiKeys.find(k => k.name === selectedKeyName);
   const currentApiKey = selectedKey?.key || null;
@@ -604,6 +692,7 @@ const Index = () => {
       <div className="flex h-screen w-full bg-background">
         <ChatSidebar
           chats={savedChats}
+          folders={folders}
           currentChatId={currentChatId}
           onNewChat={handleNewChat}
           onSelectChat={handleSelectChat}
@@ -611,11 +700,19 @@ const Index = () => {
           onRenameChat={handleRenameChat}
           onArchiveChat={handleArchiveChat}
           onDeleteChat={handleDeleteChat}
+          onMoveChatToFolder={handleMoveChatToFolder}
+          onAddTagToChat={handleAddTagToChat}
+          onRemoveTagFromChat={handleRemoveTagFromChat}
+          onCreateFolder={handleCreateFolder}
+          onUpdateFolder={handleUpdateFolder}
+          onDeleteFolder={handleDeleteFolder}
           apiKeyNames={apiKeys.map(k => k.name)}
           selectedKeyName={selectedKeyName}
           onSelectKeyName={handleSelectKeyName}
           mobileSidebarOpen={mobileSidebarOpen}
           onMobileSidebarChange={setMobileSidebarOpen}
+          searchModalOpen={searchModalOpen}
+          onSearchModalChange={setSearchModalOpen}
         />
 
       <div className="flex-1 flex flex-col">

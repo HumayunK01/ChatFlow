@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Send, Loader2, Plus, X, Mic } from 'lucide-react';
 import { sendChatMessage } from '@/lib/openrouter';
 import { useToast } from '@/hooks/use-toast';
-import { deleteChat, archiveChat } from '@/lib/localStorage';
+import { deleteChat, archiveChat, getChatById } from '@/lib/localStorage';
 import { Logo } from './Logo';
+import { exportAsPDF, exportAsMarkdown, exportAsJSON, downloadFile } from '@/lib/export';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -496,6 +497,60 @@ export function ChatInterface({
     }
   };
 
+  const handleExport = (format: 'pdf' | 'markdown' | 'json') => {
+    if (messages.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'This chat has no messages',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Get chat title if available
+      let chatTitle: string | undefined;
+      if (currentChatId) {
+        const chat = getChatById(currentChatId);
+        chatTitle = chat?.title;
+      }
+
+      const sanitizedTitle = (chatTitle || 'chat-export').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+
+      switch (format) {
+        case 'pdf':
+          exportAsPDF(messages, chatTitle);
+          toast({
+            title: 'Exporting PDF',
+            description: 'Your chat is being exported as PDF',
+          });
+          break;
+        case 'markdown':
+          const markdown = exportAsMarkdown(messages, chatTitle);
+          downloadFile(markdown, `${sanitizedTitle}.md`, 'text/markdown');
+          toast({
+            title: 'Exported',
+            description: 'Chat exported as Markdown',
+          });
+          break;
+        case 'json':
+          const json = exportAsJSON(messages, chatTitle, currentModel);
+          downloadFile(json, `${sanitizedTitle}.json`, 'application/json');
+          toast({
+            title: 'Exported',
+            description: 'Chat exported as JSON',
+          });
+          break;
+      }
+    } catch (error) {
+      toast({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Failed to export chat',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleLike = (messageId: string) => {
     const updatedMessages = messages.map((msg) => {
       if (msg.id === messageId) {
@@ -624,6 +679,7 @@ export function ChatInterface({
         onArchive={handleArchive}
         onReport={handleReport}
         onShare={handleShare}
+        onExport={handleExport}
         hasMessages={messages.length > 0}
         onOpenMobileSidebar={onOpenMobileSidebar}
         isTemporaryChat={isTemporaryChat}

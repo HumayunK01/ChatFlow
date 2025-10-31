@@ -19,12 +19,23 @@ export interface SavedChat {
   currentModel: string;
   createdAt: number;
   updatedAt: number;
+  folderId?: string | null;
+  tags?: string[];
+}
+
+export interface ChatFolder {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ChatList {
   chats: SavedChat[];
   archivedChats: SavedChat[];
   currentChatId: string | null;
+  folders: ChatFolder[];
 }
 
 export interface OpenRouterModel {

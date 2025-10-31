@@ -1,15 +1,17 @@
 import { Button } from '@/components/ui/button';
-import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download, Sparkles } from 'lucide-react';
+import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download, Sparkles, Folder, FolderPlus, Tag, Hash } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
-import { SavedChat } from '@/types/chat';
+import { SavedChat, ChatFolder } from '@/types/chat';
 import { Logo } from './Logo';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Link } from 'react-router-dom';
+import { formatKeyboardShortcut } from '@/lib/utils';
 
 interface ChatSidebarProps {
   chats: SavedChat[];
+  folders?: ChatFolder[];
   currentChatId: string | null;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
@@ -17,15 +19,24 @@ interface ChatSidebarProps {
   onRenameChat?: (chatId: string) => void;
   onArchiveChat?: (chatId: string) => void;
   onDeleteChat?: (chatId: string) => void;
+  onMoveChatToFolder?: (chatId: string, folderId: string | null) => void;
+  onAddTagToChat?: (chatId: string, tag: string) => void;
+  onRemoveTagFromChat?: (chatId: string, tag: string) => void;
+  onCreateFolder?: (name: string, color?: string) => void;
+  onUpdateFolder?: (folderId: string, updates: Partial<ChatFolder>) => void;
+  onDeleteFolder?: (folderId: string) => void;
   apiKeyNames: string[];
   selectedKeyName: string;
   onSelectKeyName: (name: string) => void;
   mobileSidebarOpen?: boolean;
   onMobileSidebarChange?: (open: boolean) => void;
+  searchModalOpen?: boolean;
+  onSearchModalChange?: (open: boolean) => void;
 }
 
 export function ChatSidebar({
   chats,
+  folders = [],
   currentChatId,
   onNewChat,
   onSelectChat,
@@ -33,11 +44,19 @@ export function ChatSidebar({
   onRenameChat,
   onArchiveChat,
   onDeleteChat,
+  onMoveChatToFolder,
+  onAddTagToChat,
+  onRemoveTagFromChat,
+  onCreateFolder,
+  onUpdateFolder,
+  onDeleteFolder,
   apiKeyNames,
   selectedKeyName,
   onSelectKeyName,
   mobileSidebarOpen = false,
   onMobileSidebarChange,
+  searchModalOpen: externalSearchModalOpen,
+  onSearchModalChange,
 }: ChatSidebarProps) {
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -56,9 +75,29 @@ export function ChatSidebar({
   });
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
-  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  // Use external control if provided, otherwise use internal state
+  const [internalSearchModalOpen, setInternalSearchModalOpen] = useState(false);
+  const searchModalOpen = externalSearchModalOpen !== undefined ? externalSearchModalOpen : internalSearchModalOpen;
+  const setSearchModalOpen = (open: boolean) => {
+    if (onSearchModalChange) {
+      onSearchModalChange(open);
+    } else {
+      setInternalSearchModalOpen(open);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [libraryModalOpen, setLibraryModalOpen] = useState(false);
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [folderColor, setFolderColor] = useState<string>('#8b5cf6');
+  const [editingFolder, setEditingFolder] = useState<ChatFolder | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [tagInput, setTagInput] = useState('');
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [tagDialogChatId, setTagDialogChatId] = useState<string | null>(null);
+  const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null);
+  const [openFolderDropdownId, setOpenFolderDropdownId] = useState<string | null>(null);
+  const folderDropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Save collapse state to localStorage
   useEffect(() => {
@@ -74,16 +113,22 @@ export function ChatSidebar({
           setOpenDropdownId(null);
         }
       }
+      if (openFolderDropdownId) {
+        const folderDropdownElement = folderDropdownRefs.current[openFolderDropdownId];
+        if (folderDropdownElement && !folderDropdownElement.contains(event.target as Node)) {
+          setOpenFolderDropdownId(null);
+        }
+      }
     };
 
-    if (openDropdownId) {
+    if (openDropdownId || openFolderDropdownId) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openDropdownId]);
+  }, [openDropdownId, openFolderDropdownId]);
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -103,6 +148,71 @@ export function ChatSidebar({
   const getFirstLetter = () => {
     return userName ? userName.charAt(0).toUpperCase() : '';
   };
+
+  // Toggle folder expansion
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  // Group chats by folders
+  const groupChatsByFolders = (chats: SavedChat[]) => {
+    const chatsInFolders: { [folderId: string]: SavedChat[] } = {};
+    const chatsWithoutFolder: SavedChat[] = [];
+
+    chats.forEach(chat => {
+      if (chat.folderId) {
+        if (!chatsInFolders[chat.folderId]) {
+          chatsInFolders[chat.folderId] = [];
+        }
+        chatsInFolders[chat.folderId].push(chat);
+      } else {
+        chatsWithoutFolder.push(chat);
+      }
+    });
+
+    return { chatsInFolders, chatsWithoutFolder };
+  };
+
+  const handleCreateFolder = () => {
+    if (folderName.trim() && onCreateFolder) {
+      onCreateFolder(folderName.trim(), folderColor);
+      setFolderDialogOpen(false);
+      setFolderName('');
+      setFolderColor('#8b5cf6');
+    }
+  };
+
+  const handleUpdateFolder = () => {
+    if (editingFolder && folderName.trim() && onUpdateFolder) {
+      onUpdateFolder(editingFolder.id, { name: folderName.trim(), color: folderColor });
+      setFolderDialogOpen(false);
+      setFolderName('');
+      setFolderColor('#8b5cf6');
+      setEditingFolder(null);
+    }
+  };
+
+  const handleAddTag = () => {
+    if (tagDialogChatId && tagInput.trim() && onAddTagToChat) {
+      onAddTagToChat(tagDialogChatId, tagInput.trim());
+      setTagDialogOpen(false);
+      setTagInput('');
+      setTagDialogChatId(null);
+    }
+  };
+
+  const folderColors = [
+    '#8b5cf6', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', 
+    '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'
+  ];
 
   // Group chats by date (Today, Yesterday, Previous 7 Days)
   const groupChatsByDate = (chats: SavedChat[]) => {
@@ -211,7 +321,7 @@ export function ChatSidebar({
             onClick={onNewChat} 
             className="w-full justify-center px-0 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors"
             variant="ghost"
-            title="New chat"
+            title={`New chat (${formatKeyboardShortcut('k')})`}
           >
             <SquarePen className="h-4 w-4 flex-shrink-0" />
           </Button>
@@ -222,7 +332,7 @@ export function ChatSidebar({
             }}
             className="w-full justify-center px-0 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors"
             variant="ghost"
-            title="Search chats"
+            title={`Search chats (${formatKeyboardShortcut('p')})`}
           >
             <Search className="h-4 w-4 flex-shrink-0" />
           </Button>
@@ -253,21 +363,31 @@ export function ChatSidebar({
         <div className="px-2 sm:px-3 pt-3 pb-2 space-y-1.5">
           <Button 
             onClick={onNewChat} 
-            className="w-full justify-start gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors text-xs sm:text-sm"
+            className="w-full justify-between gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors text-xs sm:text-sm"
             variant="ghost"
           >
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             <SquarePen className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             <span className="truncate">New chat</span>
+            </div>
+            <span className="text-[10px] sm:text-xs text-muted-foreground/60 flex-shrink-0 ml-auto">
+              {formatKeyboardShortcut('k')}
+            </span>
           </Button>
           <Button 
             onClick={() => {
               setSearchModalOpen(true);
             }}
-            className="w-full justify-start gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors text-xs sm:text-sm"
+            className="w-full justify-between gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors text-xs sm:text-sm"
             variant="ghost"
           >
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             <span className="truncate">Search chats</span>
+            </div>
+            <span className="text-[10px] sm:text-xs text-muted-foreground/60 flex-shrink-0 ml-auto">
+              {formatKeyboardShortcut('p')}
+            </span>
           </Button>
           <Button 
             onClick={() => {
@@ -279,6 +399,21 @@ export function ChatSidebar({
             <Images className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             <span className="truncate">Library</span>
           </Button>
+          {onCreateFolder && (
+            <Button 
+              onClick={() => {
+                setEditingFolder(null);
+                setFolderName('');
+                setFolderColor('#8b5cf6');
+                setFolderDialogOpen(true);
+              }}
+              className="w-full justify-start gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors text-xs sm:text-sm"
+              variant="ghost"
+            >
+              <FolderPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="truncate">New folder</span>
+            </Button>
+          )}
           {/* Upgrade button - mobile only */}
           <Link to="/pricing" className="w-full md:hidden" onClick={() => onMobileSidebarChange?.(false)}>
             <Button 
@@ -295,118 +430,522 @@ export function ChatSidebar({
       {/* Chats section */}
       {!isCollapsed && (
         <div className="flex-1 overflow-y-auto px-2 sm:px-3 pt-2">
+          {/* Chats Section */}
           {chats.length > 0 && (
             <>
               <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2">
                 Chats
               </div>
               
-              {/* Chat entries */}
-              {chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`group relative rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 mb-1 transition-colors hover:bg-muted/70 min-h-[32px] sm:min-h-[36px] flex items-center ${
-                    currentChatId === chat.id ? 'bg-muted/50' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredChatId(chat.id)}
-                  onMouseLeave={() => setHoveredChatId(null)}
-                >
-                  <div className="flex items-center justify-between w-full gap-1.5 sm:gap-2">
-                    <span
-                      onClick={() => onSelectChat(chat.id)}
-                      className="text-xs sm:text-sm text-foreground block truncate flex-1 cursor-pointer"
-                    >
-                      {chat.title}
-                    </span>
-                    
-                    {/* Always reserve space for the button to prevent height changes */}
-                    <div className="relative flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6">
-                      {(hoveredChatId === chat.id || openDropdownId === chat.id) && (
-                        <>
+              {/* Chats without folders */}
+              {(() => {
+                const { chatsWithoutFolder } = groupChatsByFolders(chats);
+                
+                return chatsWithoutFolder.map((chat) => (
+                  <div
+                    key={chat.id}
+                    className={`group relative rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 mb-1 transition-colors hover:bg-muted/70 min-h-[32px] sm:min-h-[36px] flex items-center ${
+                      currentChatId === chat.id ? 'bg-muted/50' : ''
+                    }`}
+                    onMouseEnter={() => setHoveredChatId(chat.id)}
+                    onMouseLeave={() => setHoveredChatId(null)}
+                  >
+                    <div className="flex items-center justify-between w-full gap-1.5 sm:gap-2">
+                      <span
+                        onClick={() => onSelectChat(chat.id)}
+                        className="text-xs sm:text-sm text-foreground block truncate flex-1 cursor-pointer"
+                      >
+                        {chat.title}
+                      </span>
+                      {/* Tags */}
+                      {chat.tags && chat.tags.length > 0 && (
+                        <div className="flex gap-1 flex-shrink-0 mr-2">
+                          {chat.tags.slice(0, 2).map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[8px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full"
+                              title={tag}
+                            >
+                              {tag.length > 8 ? `${tag.substring(0, 8)}...` : tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Always reserve space for the button to prevent height changes */}
+                      <div className="relative flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6">
+                        {(hoveredChatId === chat.id || openDropdownId === chat.id) && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 sm:h-6 sm:w-6 absolute"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenDropdownId(openDropdownId === chat.id ? null : chat.id);
+                              }}
+                            >
+                              <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </Button>
+                            
+                            {/* Dropdown menu */}
+                            {openDropdownId === chat.id && (
+                              <div 
+                                ref={(el) => {
+                                  dropdownRefs.current[chat.id] = el;
+                                }}
+                                className="absolute right-0 top-7 sm:top-8 z-50 w-36 sm:w-40 rounded-lg border border-border bg-background shadow-md"
+                                onMouseEnter={() => setHoveredChatId(chat.id)}
+                                onMouseLeave={() => {
+                                  setHoveredChatId(null);
+                                }}
+                              >
+                                <div className="p-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onShareChat?.(chat.id);
+                                      setOpenDropdownId(null);
+                                      setHoveredChatId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <Share2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Share</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onRenameChat?.(chat.id);
+                                      setOpenDropdownId(null);
+                                      setHoveredChatId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <Pencil className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Rename</span>
+                                  </button>
+                                  {onMoveChatToFolder && (
+                                    <>
+                                      <div className="h-px bg-border my-1 mx-2" />
+                                      <div className="px-2 py-1.5 text-xs text-muted-foreground">Move to Folder</div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMoveChatToFolder(chat.id, null);
+                                          setOpenDropdownId(null);
+                                          setHoveredChatId(null);
+                                        }}
+                                        className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                      >
+                                        <Folder className="h-4 w-4 mr-2 flex-shrink-0" />
+                                        <span className="flex-1 text-left">No Folder</span>
+                                      </button>
+                                      {folders.map((folder) => (
+                                        <button
+                                          key={folder.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onMoveChatToFolder(chat.id, folder.id);
+                                            setOpenDropdownId(null);
+                                            setHoveredChatId(null);
+                                          }}
+                                          className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                        >
+                                          <Folder
+                                            className="h-4 w-4 mr-2 flex-shrink-0"
+                                            style={{ color: folder.color || '#8b5cf6' }}
+                                          />
+                                          <span className="flex-1 text-left">{folder.name}</span>
+                                        </button>
+                                      ))}
+                                      <div className="h-px bg-border my-1 mx-2" />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setTagDialogChatId(chat.id);
+                                          setTagInput('');
+                                          setTagDialogOpen(true);
+                                          setOpenDropdownId(null);
+                                          setHoveredChatId(null);
+                                        }}
+                                        className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                      >
+                                        <Tag className="h-4 w-4 mr-2 flex-shrink-0" />
+                                        <span className="flex-1 text-left">Add Tag</span>
+                                      </button>
+                                      {chat.tags && chat.tags.length > 0 && (
+                                        <>
+                                          <div className="px-2 py-1.5 text-xs text-muted-foreground">Tags</div>
+                                          {chat.tags.map((tag) => (
+                                            <button
+                                              key={tag}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRemoveTagFromChat?.(chat.id, tag);
+                                                setOpenDropdownId(null);
+                                                setHoveredChatId(null);
+                                              }}
+                                              className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+                                            >
+                                              <Hash className="h-4 w-4 mr-2 flex-shrink-0" />
+                                              <span className="flex-1 text-left">{tag}</span>
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          ))}
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                  {/* Divider */}
+                                  <div className="h-px bg-border my-1 mx-2" />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onArchiveChat?.(chat.id);
+                                      setOpenDropdownId(null);
+                                      setHoveredChatId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <Archive className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Archive</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDeleteChat?.(chat.id);
+                                      setOpenDropdownId(null);
+                                      setHoveredChatId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </>
+          )}
+
+          {/* Folders Section */}
+          {folders.length > 0 && (
+            <>
+              <div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2 mt-4">
+                Folders
+              </div>
+              
+              {folders.map((folder) => {
+                const { chatsInFolders } = groupChatsByFolders(chats);
+                const folderChats = chatsInFolders[folder.id] || [];
+                const isExpanded = expandedFolders.has(folder.id);
+                
+                return (
+                  <div 
+                    key={folder.id} 
+                    className="mb-2 group/folder"
+                    onMouseEnter={() => setHoveredFolderId(folder.id)}
+                    onMouseLeave={() => {
+                      // Don't clear on mouse leave if dropdown is open
+                      if (!openFolderDropdownId) {
+                        setHoveredFolderId(null);
+                      }
+                    }}
+                  >
+                    <div className="relative flex items-center">
+                      <button
+                        onClick={() => toggleFolder(folder.id)}
+                        className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
+                            isExpanded ? 'transform rotate-90' : ''
+                          }`}
+                        />
+                        <Folder
+                          className="h-3.5 w-3.5 flex-shrink-0"
+                          style={{ color: folder.color || '#8b5cf6' }}
+                        />
+                        <span className="text-xs sm:text-sm font-medium text-foreground flex-1 truncate">
+                          {folder.name}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          ({folderChats.length})
+                        </span>
+                      </button>
+                      
+                      {/* Folder dropdown menu */}
+                      {(hoveredFolderId === folder.id || openFolderDropdownId === folder.id) && onDeleteFolder && (
+                        <div className="relative flex-shrink-0 mr-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-5 w-5 sm:h-6 sm:w-6 absolute"
+                            className="h-5 w-5 sm:h-6 sm:w-6"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setOpenDropdownId(openDropdownId === chat.id ? null : chat.id);
+                              setOpenFolderDropdownId(openFolderDropdownId === folder.id ? null : folder.id);
                             }}
                           >
                             <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </Button>
                           
-                          {/* Dropdown menu */}
-                          {openDropdownId === chat.id && (
+                          {openFolderDropdownId === folder.id && (
                             <div 
                               ref={(el) => {
-                                dropdownRefs.current[chat.id] = el;
+                                folderDropdownRefs.current[folder.id] = el;
                               }}
                               className="absolute right-0 top-7 sm:top-8 z-50 w-36 sm:w-40 rounded-lg border border-border bg-background shadow-md"
-                              onMouseEnter={() => setHoveredChatId(chat.id)}
+                              onMouseEnter={() => setHoveredFolderId(folder.id)}
                               onMouseLeave={() => {
-                                setHoveredChatId(null);
+                                setHoveredFolderId(null);
+                                setOpenFolderDropdownId(null);
                               }}
                             >
                               <div className="p-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onShareChat?.(chat.id);
-                                    setOpenDropdownId(null);
-                                    setHoveredChatId(null);
-                                  }}
-                                  className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
-                                >
-                                  <Share2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                                  <span className="flex-1 text-left">Share</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRenameChat?.(chat.id);
-                                    setOpenDropdownId(null);
-                                    setHoveredChatId(null);
-                                  }}
-                                  className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
-                                >
-                                  <Pencil className="h-4 w-4 mr-2 flex-shrink-0" />
-                                  <span className="flex-1 text-left">Rename</span>
-                                </button>
-                                {/* Divider */}
-                                <div className="h-px bg-border my-1 mx-2" />
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onArchiveChat?.(chat.id);
-                                    setOpenDropdownId(null);
-                                    setHoveredChatId(null);
-                                  }}
-                                  className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
-                                >
-                                  <Archive className="h-4 w-4 mr-2 flex-shrink-0" />
-                                  <span className="flex-1 text-left">Archive</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDeleteChat?.(chat.id);
-                                    setOpenDropdownId(null);
-                                    setHoveredChatId(null);
-                                  }}
-                                  className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                                  <span className="flex-1 text-left">Delete</span>
-                                </button>
+                                {onUpdateFolder && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingFolder(folder);
+                                      setFolderName(folder.name);
+                                      setFolderColor(folder.color || '#8b5cf6');
+                                      setFolderDialogOpen(true);
+                                      setOpenFolderDropdownId(null);
+                                      setHoveredFolderId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <Pencil className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Rename</span>
+                                  </button>
+                                )}
+                                {onUpdateFolder && onDeleteFolder && <div className="h-px bg-border my-1 mx-2" />}
+                                {onDeleteFolder && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDeleteFolder(folder.id);
+                                      setOpenFolderDropdownId(null);
+                                      setHoveredFolderId(null);
+                                    }}
+                                    className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <span className="flex-1 text-left">Delete</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
                     </div>
+                    
+                    {isExpanded && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {folderChats.map((chat) => (
+                          <div
+                            key={chat.id}
+                            className={`group relative rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 mb-1 transition-colors hover:bg-muted/70 min-h-[32px] sm:min-h-[36px] flex items-center ${
+                              currentChatId === chat.id ? 'bg-muted/50' : ''
+                            }`}
+                            onMouseEnter={() => setHoveredChatId(chat.id)}
+                            onMouseLeave={() => setHoveredChatId(null)}
+                          >
+                            <div className="flex items-center justify-between w-full gap-1.5 sm:gap-2">
+                              <span
+                                onClick={() => onSelectChat(chat.id)}
+                                className="text-xs sm:text-sm text-foreground block truncate flex-1 cursor-pointer"
+                              >
+                                {chat.title}
+                              </span>
+                              {/* Tags */}
+                              {chat.tags && chat.tags.length > 0 && (
+                                <div className="flex gap-1 flex-shrink-0 mr-2">
+                                  {chat.tags.slice(0, 2).map((tag, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-[8px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full"
+                                      title={tag}
+                                    >
+                                      {tag.length > 8 ? `${tag.substring(0, 8)}...` : tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {/* Always reserve space for the button to prevent height changes */}
+                              <div className="relative flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6">
+                                {(hoveredChatId === chat.id || openDropdownId === chat.id) && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 sm:h-6 sm:w-6 absolute"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenDropdownId(openDropdownId === chat.id ? null : chat.id);
+                                      }}
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    </Button>
+                                    
+                                    {/* Dropdown menu */}
+                                    {openDropdownId === chat.id && (
+                                      <div 
+                                        ref={(el) => {
+                                          dropdownRefs.current[chat.id] = el;
+                                        }}
+                                        className="absolute right-0 top-7 sm:top-8 z-50 w-36 sm:w-40 rounded-lg border border-border bg-background shadow-md"
+                                        onMouseEnter={() => setHoveredChatId(chat.id)}
+                                        onMouseLeave={() => {
+                                          setHoveredChatId(null);
+                                        }}
+                                      >
+                                        <div className="p-1">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onShareChat?.(chat.id);
+                                              setOpenDropdownId(null);
+                                              setHoveredChatId(null);
+                                            }}
+                                            className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                          >
+                                            <Share2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <span className="flex-1 text-left">Share</span>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onRenameChat?.(chat.id);
+                                              setOpenDropdownId(null);
+                                              setHoveredChatId(null);
+                                            }}
+                                            className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                          >
+                                            <Pencil className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <span className="flex-1 text-left">Rename</span>
+                                          </button>
+                                          {onMoveChatToFolder && (
+                                            <>
+                                              <div className="h-px bg-border my-1 mx-2" />
+                                              <div className="px-2 py-1.5 text-xs text-muted-foreground">Move to Folder</div>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onMoveChatToFolder(chat.id, null);
+                                                  setOpenDropdownId(null);
+                                                  setHoveredChatId(null);
+                                                }}
+                                                className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                              >
+                                                <Folder className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                <span className="flex-1 text-left">No Folder</span>
+                                              </button>
+                                              {folders.map((f) => (
+                                                <button
+                                                  key={f.id}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onMoveChatToFolder(chat.id, f.id);
+                                                    setOpenDropdownId(null);
+                                                    setHoveredChatId(null);
+                                                  }}
+                                                  className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                                >
+                                                  <Folder
+                                                    className="h-4 w-4 mr-2 flex-shrink-0"
+                                                    style={{ color: f.color || '#8b5cf6' }}
+                                                  />
+                                                  <span className="flex-1 text-left">{f.name}</span>
+                                                </button>
+                                              ))}
+                                              <div className="h-px bg-border my-1 mx-2" />
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setTagDialogChatId(chat.id);
+                                                  setTagInput('');
+                                                  setTagDialogOpen(true);
+                                                  setOpenDropdownId(null);
+                                                  setHoveredChatId(null);
+                                                }}
+                                                className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                              >
+                                                <Tag className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                <span className="flex-1 text-left">Add Tag</span>
+                                              </button>
+                                              {chat.tags && chat.tags.length > 0 && (
+                                                <>
+                                                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Tags</div>
+                                                  {chat.tags.map((tag) => (
+                                                    <button
+                                                      key={tag}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onRemoveTagFromChat?.(chat.id, tag);
+                                                        setOpenDropdownId(null);
+                                                        setHoveredChatId(null);
+                                                      }}
+                                                      className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+                                                    >
+                                                      <Hash className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                      <span className="flex-1 text-left">{tag}</span>
+                                                      <X className="h-3 w-3" />
+                                                    </button>
+                                                  ))}
+                                                </>
+                                              )}
+                                            </>
+                                          )}
+                                          {/* Divider */}
+                                          <div className="h-px bg-border my-1 mx-2" />
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onArchiveChat?.(chat.id);
+                                              setOpenDropdownId(null);
+                                              setHoveredChatId(null);
+                                            }}
+                                            className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer"
+                                          >
+                                            <Archive className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <span className="flex-1 text-left">Archive</span>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onDeleteChat?.(chat.id);
+                                              setOpenDropdownId(null);
+                                              setHoveredChatId(null);
+                                            }}
+                                            className="w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors cursor-pointer text-destructive hover:text-destructive"
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <span className="flex-1 text-left">Delete</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>
@@ -581,6 +1120,11 @@ export function ChatSidebar({
                 className="w-full pl-9 pr-9 h-10"
                 autoFocus
               />
+              {!searchQuery && (
+                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[10px] text-muted-foreground/60 hidden sm:inline-block">
+                  {formatKeyboardShortcut('p')}
+                </span>
+              )}
               {searchQuery && (
                 <button
                   onClick={(e) => {
@@ -703,6 +1247,125 @@ export function ChatSidebar({
               );
             })()}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Folder Dialog */}
+      <Dialog open={folderDialogOpen} onOpenChange={(open) => {
+        setFolderDialogOpen(open);
+        if (!open) {
+          setFolderName('');
+          setFolderColor('#8b5cf6');
+          setEditingFolder(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{editingFolder ? 'Edit Folder' : 'New Folder'}</DialogTitle>
+            <DialogDescription>
+              {editingFolder ? 'Update folder name and color.' : 'Create a new folder to organize your chats.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Folder Name</label>
+              <Input
+                value={folderName}
+                onChange={(e) => setFolderName(e.target.value)}
+                placeholder="Enter folder name"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && folderName.trim()) {
+                    editingFolder ? handleUpdateFolder() : handleCreateFolder();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Color</label>
+              <div className="flex gap-2 flex-wrap">
+                {folderColors.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setFolderColor(color)}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      folderColor === color ? 'border-foreground scale-110' : 'border-border hover:border-foreground/50'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFolderDialogOpen(false);
+                setFolderName('');
+                setFolderColor('#8b5cf6');
+                setEditingFolder(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={editingFolder ? handleUpdateFolder : handleCreateFolder}
+              disabled={!folderName.trim()}
+            >
+              {editingFolder ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tag Dialog */}
+      <Dialog open={tagDialogOpen} onOpenChange={(open) => {
+        setTagDialogOpen(open);
+        if (!open) {
+          setTagInput('');
+          setTagDialogChatId(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Tag</DialogTitle>
+            <DialogDescription>
+              Add a tag to help organize this chat.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="Enter tag name"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && tagInput.trim()) {
+                  handleAddTag();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTagDialogOpen(false);
+                setTagInput('');
+                setTagDialogChatId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddTag}
+              disabled={!tagInput.trim()}
+            >
+              Add Tag
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

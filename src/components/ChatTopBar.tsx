@@ -1,9 +1,13 @@
-import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed, Moon, Sun, Sparkles } from 'lucide-react';
+import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed, Moon, Sun, Sparkles, Download, FileText, FileJson, File } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { OpenRouterModel } from '@/types/chat';
@@ -17,13 +21,14 @@ interface ChatTopBarProps {
   onReport?: () => void;
   onDelete?: () => void;
   onShare?: () => void;
+  onExport?: (format: 'pdf' | 'markdown' | 'json') => void;
   hasMessages?: boolean;
   onOpenMobileSidebar?: () => void;
   isTemporaryChat?: boolean;
   onToggleTemporaryChat?: () => void;
 }
 
-export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelete, onShare, hasMessages = false, onOpenMobileSidebar, isTemporaryChat = false, onToggleTemporaryChat }: ChatTopBarProps) {
+export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelete, onShare, onExport, hasMessages = false, onOpenMobileSidebar, isTemporaryChat = false, onToggleTemporaryChat }: ChatTopBarProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   // Initialize theme
@@ -158,6 +163,31 @@ export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelet
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {onExport && (
+                  <>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem onClick={() => onExport('pdf')}>
+                          <File className="h-4 w-4 mr-2" />
+                          PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onExport('markdown')}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Markdown
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onExport('json')}>
+                          <FileJson className="h-4 w-4 mr-2" />
+                          JSON
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem onClick={handleArchive}>
                   <Archive className="h-4 w-4 mr-2" />
                   Archive
