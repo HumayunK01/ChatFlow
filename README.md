@@ -1,6 +1,8 @@
-# ChatFlow 💬
-
 <div align="center">
+
+<img src="./public/blacklogo.png" alt="ChatFlow Logo" width="200" />
+
+# ChatFlow 💬
 
 **A modern, feature-rich AI chat assistant powered by OpenRouter**
 
@@ -8,10 +10,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4-purple?logo=vite)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8?logo=tailwindcss)](https://tailwindcss.com/)
-
-</div>
-
-<div align="center">
 
 ![ChatFlow Preview](./public/preview.png)
 
@@ -36,6 +34,11 @@
 - 🔍 **Chat Search** - Quickly find conversations in your chat history
 - 📋 **Copy Messages** - Copy individual messages or entire conversations
 - 🏷️ **Chat Management** - Rename, archive, delete, and organize your chats
+- 📁 **Folders & Tags** - Organize chats into folders and tag them for better organization
+- ⌨️ **Keyboard Shortcuts** - Work faster with keyboard shortcuts (Cmd+K for new chat, Cmd+P for search)
+- 📤 **Chat Export** - Export conversations as PDF, Markdown, or JSON
+- 🎤 **Voice Input** - Use speech-to-text for hands-free messaging
+- 🖼️ **Image Support** - Upload and include images in your conversations
 
 ### Developer Experience
 - ⚡ **Fast Development** - Hot module replacement with Vite
@@ -119,7 +122,29 @@
 - **Rename**: Click the edit icon next to a chat in the sidebar
 - **Archive**: Use the archive button to organize your chats
 - **Delete**: Remove chats you no longer need
-- **Search**: Use the search bar to quickly find specific conversations
+- **Search**: Use the search bar to quickly find specific conversations (Cmd+P / Ctrl+P)
+
+### Organizing with Folders & Tags
+
+- **Create Folders**: Click "New folder" button in the sidebar to create folders with custom colors
+- **Move Chats**: Right-click any chat and select a folder to move it
+- **Add Tags**: Add tags to chats for additional categorization
+- **Manage Folders**: Rename or delete folders from the folder dropdown menu
+
+### Keyboard Shortcuts
+
+- **Cmd+K / Ctrl+K** - Start a new chat
+- **Cmd+P / Ctrl+P** - Open search modal
+- **Escape** - Close modals and dialogs
+- **Enter** - Send message (Shift+Enter for new line)
+
+### Exporting Chats
+
+- **PDF Export**: Export conversations as PDF via print dialog
+- **Markdown Export**: Download chats as formatted Markdown files
+- **JSON Export**: Export full chat data including metadata as JSON
+
+Access export options from the menu (three dots) in the chat top bar.
 
 ### Code Blocks
 
@@ -172,14 +197,19 @@ ChatFlow/
 │   │   ├── ChatInterface.tsx
 │   │   ├── ChatMessage.tsx
 │   │   ├── ChatSidebar.tsx
-│   │   └── ChatTopBar.tsx
+│   │   ├── ChatTopBar.tsx
+│   │   └── Logo.tsx
 │   ├── config/           # Configuration files
 │   │   └── apiKeys.ts    # API key configuration
 │   ├── hooks/            # Custom React hooks
-│   │   └── use-toast.ts
+│   │   ├── use-toast.ts
+│   │   ├── use-mobile.tsx
+│   │   └── use-keyboard-shortcuts.tsx
 │   ├── lib/              # Utility functions
 │   │   ├── localStorage.ts
-│   │   └── openrouter.ts
+│   │   ├── openrouter.ts
+│   │   ├── export.ts     # Export utilities (PDF, Markdown, JSON)
+│   │   └── utils.ts      # General utilities
 │   ├── pages/            # Page components
 │   │   └── Index.tsx
 │   ├── types/            # TypeScript definitions
