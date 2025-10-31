@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="./public/blacklogo.png" alt="ChatFlow Logo" width="200" />
+<img src="./public/whitelogo.png" alt="ChatFlow Logo" width="200" />
 
-# ChatFlow 💬
+# ChatFlow
 
 **A modern, feature-rich AI chat assistant powered by OpenRouter**
 

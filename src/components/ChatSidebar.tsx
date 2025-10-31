@@ -347,6 +347,22 @@ export function ChatSidebar({
           >
             <Images className="h-4 w-4 flex-shrink-0" />
           </Button>
+          {/* New folder button */}
+          {onCreateFolder && (
+            <Button 
+              onClick={() => {
+                setEditingFolder(null);
+                setFolderName('');
+                setFolderColor('#8b5cf6');
+                setFolderDialogOpen(true);
+              }}
+              className="w-full justify-center px-0 h-8 sm:h-9 font-normal text-foreground bg-background hover:bg-muted/50 rounded-xl transition-colors"
+              variant="ghost"
+              title="New folder"
+            >
+              <FolderPlus className="h-4 w-4 flex-shrink-0" />
+            </Button>
+          )}
           {/* Upgrade button - mobile only */}
           <Link to="/pricing" className="w-full md:hidden" onClick={() => onMobileSidebarChange?.(false)}>
             <Button 
@@ -674,7 +690,7 @@ export function ChatSidebar({
                           className="h-3.5 w-3.5 flex-shrink-0"
                           style={{ color: folder.color || '#8b5cf6' }}
                         />
-                        <span className="text-xs sm:text-sm font-medium text-foreground flex-1 truncate">
+                        <span className="text-xs sm:text-sm text-foreground flex-1 truncate">
                           {folder.name}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
