@@ -5,7 +5,7 @@ import { ChatTopBar } from './ChatTopBar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Loader2, Plus, X } from 'lucide-react';
+import { Send, Loader2, Plus, X, Mic } from 'lucide-react';
 import { sendChatMessage } from '@/lib/openrouter';
 import { useToast } from '@/hooks/use-toast';
 import { deleteChat, archiveChat } from '@/lib/localStorage';
@@ -50,6 +50,8 @@ export function ChatInterface({
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const { toast } = useToast();
   const [isDark, setIsDark] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Detect theme changes similar to Logo component
   useEffect(() => {
@@ -133,6 +135,105 @@ export function ChatInterface({
 
   const handleRemoveImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Speech Recognition setup
+  useEffect(() => {
+    // Check if browser supports speech recognition
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        // Add final transcript to input
+        setInput(prev => {
+          const trimmed = prev.trim();
+          return trimmed ? `${trimmed} ${finalTranscript.trim()}` : finalTranscript.trim();
+        });
+      } else if (interimTranscript && !finalTranscript) {
+        // Show interim results while speaking (optional - can be removed)
+        // This provides real-time feedback, but might be distracting
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error === 'no-speech') {
+        // User stopped speaking, stop recognition
+        recognition.stop();
+        setIsListening(false);
+      } else if (event.error === 'audio-capture') {
+        toast({
+          title: 'Microphone Error',
+          description: 'No microphone found. Please check your microphone settings.',
+          variant: 'destructive',
+        });
+        setIsListening(false);
+      } else if (event.error === 'not-allowed') {
+        toast({
+          title: 'Permission Denied',
+          description: 'Microphone permission denied. Please enable microphone access.',
+          variant: 'destructive',
+        });
+        setIsListening(false);
+      } else {
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition as SpeechRecognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [toast]);
+
+  const handleStartDictation = () => {
+    if (!recognitionRef.current) {
+      toast({
+        title: 'Not Supported',
+        description: 'Speech recognition is not supported in your browser.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (error) {
+        setIsListening(false);
+      }
+    }
   };
 
   const handlePlusClick = () => {
@@ -707,6 +808,19 @@ export function ChatInterface({
               className="flex-1 h-auto bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none text-sm placeholder:text-muted-foreground/60 py-0"
               disabled={isLoading}
             />
+
+            {/* Microphone button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 rounded-full hover:bg-transparent p-0 ml-1 sm:ml-2 ${isListening ? 'text-red-500 dark:text-red-400' : ''}`}
+              onClick={handleStartDictation}
+              type="button"
+              disabled={isLoading}
+              title={isListening ? 'Stop dictation' : 'Start dictation'}
+            >
+              <Mic className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isListening ? 'animate-pulse' : ''}`} />
+            </Button>
 
             {/* Send button on the right */}
             <Button

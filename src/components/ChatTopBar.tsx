@@ -1,4 +1,4 @@
-import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed, Moon, Sun } from 'lucide-react';
+import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed, Moon, Sun, Sparkles } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { OpenRouterModel } from '@/types/chat';
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 interface ChatTopBarProps {
   models: OpenRouterModel[];
@@ -93,8 +94,22 @@ export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelet
         </span>
       </div>
 
+      {/* Center: Upgrade to Go button */}
+      <div className="absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
+        <Link to="/pricing">
+          <Button
+            className="h-8 sm:h-9 px-3 sm:px-4 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-full font-medium text-sm sm:text-base gap-2 flex-shrink-0"
+            variant="default"
+          >
+            <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>Upgrade</span>
+          </Button>
+        </Link>
+      </div>
+
       {/* Right: Theme toggle, Temporary chat, Share and More menu */}
       <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0">
+
         {/* Theme Toggle */}
         <Button
           variant="ghost"
