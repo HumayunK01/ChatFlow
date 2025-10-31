@@ -1,4 +1,4 @@
-import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed } from 'lucide-react';
+import { Share2, MoreVertical, Archive, Flag, Trash2, Menu, MessageCircleDashed, Moon, Sun } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { OpenRouterModel } from '@/types/chat';
+import { useState, useEffect } from 'react';
 
 interface ChatTopBarProps {
   models: OpenRouterModel[];
@@ -22,6 +23,37 @@ interface ChatTopBarProps {
 }
 
 export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelete, onShare, hasMessages = false, onOpenMobileSidebar, isTemporaryChat = false, onToggleTemporaryChat }: ChatTopBarProps) {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  // Initialize theme
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const initialTheme = savedTheme || systemTheme;
+    
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle('dark', initialTheme === 'dark');
+
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('theme')) {
+        const newTheme = e.matches ? 'dark' : 'light';
+        setTheme(newTheme);
+        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
+
   const handleArchive = () => {
     onArchive?.();
   };
@@ -61,8 +93,23 @@ export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelet
         </span>
       </div>
 
-      {/* Right: Temporary chat, Share and More menu */}
+      {/* Right: Theme toggle, Temporary chat, Share and More menu */}
       <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0">
+        {/* Theme Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9"
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          {theme === 'light' ? (
+            <Moon className="h-4 w-4" />
+          ) : (
+            <Sun className="h-4 w-4" />
+          )}
+        </Button>
+
         {/* Temporary Chat button - only show when no messages or in temporary mode */}
         {(!hasMessages || isTemporaryChat) && (
           <Button
