@@ -11,6 +11,12 @@
 
 </div>
 
+<div align="center">
+
+![ChatFlow Preview](./public/preview.png)
+
+</div>
+
 ---
 
 ## ✨ Features
@@ -50,7 +56,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/HumayunK01/ChatFlow.git
    cd ChatFlow
    ```
 
