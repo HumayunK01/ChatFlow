@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/button';
-import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download } from 'lucide-react';
+import { Plus, Menu, Search, Pencil, Share2, Archive, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, PanelRight, X, MessageCircle, SquarePen, Images, Download, Sparkles } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect, useRef } from 'react';
 import { SavedChat } from '@/types/chat';
 import { Logo } from './Logo';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Link } from 'react-router-dom';
 
 interface ChatSidebarProps {
   chats: SavedChat[];
@@ -236,6 +237,16 @@ export function ChatSidebar({
           >
             <Images className="h-4 w-4 flex-shrink-0" />
           </Button>
+          {/* Upgrade button - mobile only */}
+          <Link to="/pricing" className="w-full md:hidden" onClick={() => onMobileSidebarChange?.(false)}>
+            <Button 
+              className="w-full justify-center px-0 h-8 sm:h-9 font-normal bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl transition-colors gap-2"
+              variant="default"
+              title="Upgrade"
+            >
+              <Sparkles className="h-4 w-4 flex-shrink-0" />
+            </Button>
+          </Link>
         </div>
       ) : (
         /* Expanded sidebar - New chat and Search buttons */
@@ -268,6 +279,16 @@ export function ChatSidebar({
             <Images className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             <span className="truncate">Library</span>
           </Button>
+          {/* Upgrade button - mobile only */}
+          <Link to="/pricing" className="w-full md:hidden" onClick={() => onMobileSidebarChange?.(false)}>
+            <Button 
+              className="w-full justify-start gap-1.5 sm:gap-2 h-8 sm:h-9 font-normal bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl transition-colors text-xs sm:text-sm"
+              variant="default"
+            >
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="truncate">Upgrade</span>
+            </Button>
+          </Link>
         </div>
       )}
 

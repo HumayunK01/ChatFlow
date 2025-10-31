@@ -94,8 +94,8 @@ export function ChatTopBar({ models, selectedModel, onArchive, onReport, onDelet
         </span>
       </div>
 
-      {/* Center: Upgrade to Go button */}
-      <div className="absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
+      {/* Center: Upgrade to Go button - hidden on mobile */}
+      <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
         <Link to="/pricing">
           <Button
             className="h-8 sm:h-9 px-3 sm:px-4 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-full font-medium text-sm sm:text-base gap-2 flex-shrink-0"
